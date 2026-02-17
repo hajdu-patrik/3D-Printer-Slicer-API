@@ -4,7 +4,7 @@ from PIL import Image
 from stl import mesh
 
 # Image->STL converter method
-def image_to_stl(image_path, output_path, width_mm=100, height_mm=None, depth_mm=3, invert=True):
+def image_to_stl(image_path, output_path, width_mm=100, height_mm=None, depth_mm=3):
     img = Image.open(image_path).convert('L')
     
     # Size and aspect ratio
@@ -12,14 +12,6 @@ def image_to_stl(image_path, output_path, width_mm=100, height_mm=None, depth_mm
     aspect = h_px / w_px
     if height_mm is None:
         height_mm = width_mm * aspect
-    
-    # Pixel data handling (Placeholder for advanced lithophane logic)
-    # img_array = np.array(img)
-    # if invert:
-    #    img_array = 255 - img_array
-    
-    # Note: z_heights array calculation logic is commented out to avoid "unused variable" warning
-    # z_heights = (img_array / 255.0) * depth_mm + 0.5
 
     print(f"Converting {image_path} to {output_path}...")
     

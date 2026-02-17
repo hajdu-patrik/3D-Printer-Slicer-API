@@ -1,8 +1,8 @@
 import sys
 import trimesh
-# numpy is imported by trimesh, explicit import optional but kept for clarity
 import numpy as np 
 
+# Vector->STL converter method
 def vector_to_stl(input_path, output_path, thickness=2.0):
     print(f"Processing vector file: {input_path}")
     

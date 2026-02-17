@@ -6,7 +6,7 @@ ENV LANG=C.UTF-8
 
 WORKDIR /app
 
-# 1. System dependencies & Locale generation (Merged layer)
+# 1. System dependencies & Locale generation
 RUN apt-get update && apt-get install -y \
     wget curl unzip git \
     libglu1-mesa libgtk-3-0 libegl1 libgdiplus libwebkit2gtk-4.1-0 \
@@ -35,6 +35,7 @@ RUN pip3 install trimesh[easy] ezdxf shapely svg.path --break-system-packages
 # 5. Application Files
 COPY app/img2stl.py .
 COPY app/vector2stl.py .
+COPY app/mesh2stl.py .
 COPY app/server.js .
 COPY configs/ ./configs/
 

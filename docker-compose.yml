@@ -5,6 +5,10 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./uploads:/app/uploads
+      - ./input:/app/input
       - ./output:/app/output
+      - ./app/server.js:/app/server.js
+      - ./app/img2stl.py:/app/img2stl.py
+      - ./app/vector2stl.py:/app/vector2stl.py
+      - ./app/mesh2stl.py:/app/mesh2stl.py
     restart: always

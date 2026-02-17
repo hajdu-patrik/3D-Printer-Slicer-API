@@ -11,35 +11,33 @@ app.use(cors());
 
 app.use('/download', express.static(path.join(__dirname, 'output')));
 
-// --- CHANGE: Upload to specific subfolder to keep root clean ---
 const HELP_FILES_DIR = path.join(__dirname, 'input', 'slicing-helper-files');
-// Ensure directory exists
-if (!fs.existsSync(HELP_FILES_DIR)) {
-    fs.mkdirSync(HELP_FILES_DIR, { recursive: true });
-}
+
+if (!fs.existsSync(HELP_FILES_DIR)) fs.mkdirSync(HELP_FILES_DIR, { recursive: true });
 
 const upload = multer({ dest: HELP_FILES_DIR });
 
-// --- SWAGGER CONFIGURATION ---
+// --- SWAGGER DOCUMENTATION ---
 const swaggerDocument = {
   openapi: '3.0.0',
   info: {
     title: 'Rocket3D Slicer API',
-    version: '1.2.0',
+    version: '1.0.0',
     description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
   },
+  /*
   servers: [
     {
       url: 'http://localhost:3000',
       description: 'Local Server'
     }
   ],
+  */
   paths: {
-    paths: {
     '/slice': {
       post: {
         summary: 'Upload 2D/3D files and get slicing results with price estimation',
-        description: 'Supported Files: 3D Model Files: .stl, .obj, .3mf, .stp, .step, .igs, .iges,.zip | Image Files: .jpg/.jpeg/.png/.bmp | Vector Files: .dxf/.svg/.eps/.pdf',
+        description: 'Supported Files: <br>* **3D Model Files:** .stl, .obj, .3mf, .stp, .step, .igs, .iges, .zip <br>* **Image Files:** .jpg, .jpeg, .png, .bmp <br>* **Vector Files:** .dxf, .svg, .eps, .pdf',
         consumes: ['multipart/form-data'],
         requestBody: {
           content: {
@@ -56,15 +54,22 @@ const swaggerDocument = {
                     type: 'string',
                     enum: ['0.025', '0.05', '0.1', '0.2', '0.3'],
                     default: '0.2',
-                    description: 'Layer height (<= 0.05 triggers SLA, > 0.05 triggers FDM)'
+                    description: 'Layer height **<= 0.05** triggers SLA <br>Layer height **> 0.05** triggers FDM)'
                   },
-                  materials: {
+                  material: {
                     type: 'string',
                     default: 'PLA',
-                    description: 'Available materials for FDM technology: PLA, ABS, PETG, TPU | Available materials for SLA technology: Standard, ABS-Like, Flexible'
+                    description: 'Available materials for FDM technology: **PLA**, **ABS**, **PETG**, **TPU** <br>Available materials for SLA technology: **Standard**, **ABS-Like**, **Flexible**'
+                  },
+                  infill: {
+                    type: 'integer',
+                    default: 20,
+                    minimum: 0,
+                    maximum: 100,
+                    description: 'Infill percentage (*0%-100%*). </br>Only affects FDM print time and material usage!'
                   }
                 },
-                required: ['choosenFile', 'layerHeight', 'materials']
+                required: ['choosenFile', 'layerHeight', 'material']
               }
             }
           }
@@ -88,7 +93,6 @@ const swaggerDocument = {
                       }
                     },
                     download_url: { type: 'string' }
-                    }
                   }
                 }
               }
@@ -103,14 +107,15 @@ const swaggerDocument = {
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/', (req, res) => res.redirect('/docs'));
 
-// --- PRICING CONFIGURATION (HUF/hour) ---
+
+// Pricing structure with hourly rates based on technology and material.
 const PRICING = {
-    base_fee: 500, 
     FDM: { PLA: 800, ABS: 800, PETG: 900, TPU: 900, default: 800 },
     SLA: { Standard: 1800, 'ABS-Like': 1800, Flexible: 2400, default: 1800 }
 };
 
-// --- SUPPORTED EXTENSIONS ---
+
+// Supported file extensions
 const EXTENSIONS = {
     direct: ['.stl', '.obj', '.3mf'],
     cad: ['.stp', '.step', '.igs', '.iges'], 
@@ -119,23 +124,34 @@ const EXTENSIONS = {
     archive: ['.zip']
 };
 
-/**
- * Main Slicing Endpoint
- */
-app.post('/slice', upload.single('choosenFile'), async (req, res) => {
+
+// --- MAIN SLICING ENDPOINTS ---
+app.post('/slice', upload.any(), async (req, res) => {
+    const file = req.files ? req.files.find(f => f.fieldname === 'choosenFile') : null;
+
+    if (!file) return res.status(400).json({ error: 'No file uploaded or wrong field name (expected "choosenFile")' });
+
+    req.file = file;
+
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     let inputFile = req.file.path;
     const originalName = req.file.originalname.toLowerCase();
     const originalExt = path.extname(originalName);
     
-    const layerHeight = parseFloat(req.body.layerHeight || '0.2');
+    const layerHeight = Number.parseFloat(req.body.layerHeight || '0.2');
     const material = req.body.material || 'PLA';
+    
+    let infillRaw = Number.parseInt(req.body.infill);
+    if (Number.isNaN(infillRaw)) infillRaw = 20;
+    if (infillRaw < 0) infillRaw = 0;
+    if (infillRaw > 100) infillRaw = 100;
+    const infillPercentage = `${infillRaw}%`;
 
     let technology = 'FDM';
     if (layerHeight <= 0.05) technology = 'SLA';
 
-    console.log(`[INFO] Processing: ${originalName} | Tech: ${technology}`);
+    console.log(`[INFO] Processing: ${originalName} | Tech: ${technology} | Infill: ${infillPercentage}`);
 
     const tempFileWithExt = inputFile + originalExt;
     fs.renameSync(inputFile, tempFileWithExt);
@@ -143,6 +159,9 @@ app.post('/slice', upload.single('choosenFile'), async (req, res) => {
 
     try {
         let processableFile = inputFile;
+
+        const currentExt = path.extname(processableFile).toLowerCase();
+        let finalStlPath = processableFile;
 
         // 1. ZIP Extraction
         if (originalExt === '.zip') {
@@ -158,26 +177,47 @@ app.post('/slice', upload.single('choosenFile'), async (req, res) => {
             processableFile = path.join(unzipDir, foundFile);
         }
 
-        const currentExt = path.extname(processableFile).toLowerCase();
+        // 2. Direct STL
+        else if (currentExt === '.stl') {
+            console.log("[INFO] File is already STL. Proceeding...");
+            finalStlPath = processableFile;
+        }
 
-        // 2. Image Conversion
-        if (EXTENSIONS.image.includes(currentExt)) {
-            const convertedStl = processableFile + '.stl';
-            await runCommand(`python3 img2stl.py "${processableFile}" "${convertedStl}"`);
-            processableFile = convertedStl;
+        // 3. Image Conversion
+        else if (EXTENSIONS.image.includes(currentExt)) {
+            console.log(`[INFO] Converting Image (${currentExt}) to STL...`);
+            finalStlPath = processableFile + '.stl';
+            await runCommand(`python3 img2stl.py "${processableFile}" "${finalStlPath}"`);
         }
 
         // 3. Vector Conversion
-        if (EXTENSIONS.vector.includes(currentExt)) {
-            const convertedStl = processableFile + '.stl';
-            await runCommand(`python3 vector2stl.py "${processableFile}" "${convertedStl}" 2.0`);
-            processableFile = convertedStl;
+        else if (EXTENSIONS.vector.includes(currentExt)) {
+            console.log(`[INFO] Converting Vector (${currentExt}) to STL...`);
+            finalStlPath = processableFile + '.stl';
+            await runCommand(`python3 vector2stl.py "${processableFile}" "${finalStlPath}" 2.0`);
+        }
+        
+        // 4. Mesh Conversion
+        else if (['.obj', '.3mf', '.ply'].includes(currentExt)) {
+            console.log(`[INFO] Converting Mesh (${currentExt}) to STL...`);
+            finalStlPath = processableFile + '.stl';
+            await runCommand(`python3 mesh2stl.py "${processableFile}" "${finalStlPath}"`);
         }
 
-        // 4. Model Info
+        // 5. CAD Conversion
+        else if (EXTENSIONS.cad.includes(currentExt)) {
+            console.log(`[INFO] Converting CAD (${currentExt}) to STL using PrusaSlicer...`);
+            finalStlPath = processableFile + '.stl';
+            // PrusaSlicer parancs csak konvertálásra:
+            await runCommand(`prusa-slicer --export-stl --output "${finalStlPath}" "${processableFile}"`);
+        }
+
+        processableFile = finalStlPath;
+
+        // 6. Model Info
         const modelInfo = await getModelInfo(processableFile);
         
-        // 5. Slicing
+        // 7. Slicing
         const outputFilename = `output-${Date.now()}.${technology === 'SLA' ? 'sl1' : 'gcode'}`;
         const outputPath = path.join(__dirname, 'output', outputFilename);
         const configFile = path.join(__dirname, 'configs', `${technology}_${layerHeight}mm.ini`);
@@ -185,50 +225,50 @@ app.post('/slice', upload.single('choosenFile'), async (req, res) => {
         if (!fs.existsSync(configFile)) throw new Error(`Missing config: ${path.basename(configFile)}`);
 
         let slicerArgs = `--load "${configFile}"`;
+
         if (technology === 'SLA') {
             slicerArgs += ` --export-sla --output "${outputPath}"`;
         } else {
-            slicerArgs += ` --gcode-flavor marlin --export-gcode --output "${outputPath}"`;
+            slicerArgs += ` --gcode-flavor marlin --export-gcode --output "${outputPath}" --fill-density ${infillPercentage}`;
         }
         
         const command = `prusa-slicer ${slicerArgs} "${processableFile}"`;
         await runCommand(command);
 
-        // 6. Analysis
+        // 8. Analysis
         const stats = await parseOutputDetailed(outputPath, technology, layerHeight, modelInfo.height_mm);
         
-        // Cleanup Logic (Updated for help-files)
+        // Cleanup Logic
         try {
-            // Delete the input file (which is in help-files)
             if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
 
-            // Delete unzip directory if it exists
             const unzipDirMatch = processableFile.match(/(.*unzip_\d+)/);
             if (unzipDirMatch) {
                 fs.rmSync(unzipDirMatch[1], { recursive: true, force: true });
             } 
-            // Delete intermediate converted files (if not in unzip dir and different from input)
             else if (processableFile !== inputFile && fs.existsSync(processableFile)) {
                 fs.unlinkSync(processableFile);
             }
             
-            // Cleanup potential residual .sl1 next to input
             const residual = inputFile.replace(/\.[^/.]+$/, ".sl1");
             if (fs.existsSync(residual)) fs.unlinkSync(residual);
 
-        } catch (cleanupErr) {
-            console.error("[CLEANUP WARNING]", cleanupErr.message);
+        } catch (err) {
+            console.error("[CLEANUP WARNING]", err.message);
         }
 
         const hourlyRate = (PRICING[technology][material]) || PRICING[technology].default;
         const printHours = stats.print_time_seconds / 3600;
-        const calcHours = printHours > 0 ? printHours : 0.25;
-        const totalPrice = Math.ceil((PRICING.base_fee + (calcHours * hourlyRate)) / 10) * 10;
+
+        const calcHours = printHours > 0 ? printHours : 0.25; 
+        
+        const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10;
 
         res.json({
             success: true,
             technology: technology,
             material: material,
+            infill: infillPercentage,
             hourly_rate: hourlyRate,
             stats: { ...stats, estimated_price_huf: totalPrice },
             download_url: `/download/${outputFilename}`
@@ -240,30 +280,38 @@ app.post('/slice', upload.single('choosenFile'), async (req, res) => {
     }
 });
 
+
 // --- HELPER FUNCTIONS ---
-/**
- * Uses PrusaSlicer's --info command to extract model height. This is crucial for SLA time estimation.
- * It first tries to find the height from the "size" output, and if not available, it looks for "max_z" in bounds.
- * If both fail, it returns 0, which will lead to a fallback time estimation for SLA.
- */
 async function getModelInfo(filePath) {
     try {
+        console.log(`[DEBUG] Getting info for: ${filePath}`); // <--- ÚJ SOR
         const { stdout } = await runCommand(`prusa-slicer --info "${filePath}"`);
+        
+        console.log(`[DEBUG] Slicer Info Output:\n${stdout}`); // <--- ÚJ SOR (Ez a legfontosabb!)
+
         let height = 0;
+        // Kicsit lazítottam a Regex-en, hogy rugalmasabb legyen
         const sizeMatch = stdout.match(/size:.*,\s*([0-9.]+)/i);
         const boundsMatch = stdout.match(/max_z\s*=\s*([0-9.]+)/i);
-        if (sizeMatch) height = parseFloat(sizeMatch[1]);
-        else if (boundsMatch) height = parseFloat(boundsMatch[1]);
+
+        if (sizeMatch) {
+            height = Number.parseFloat(sizeMatch[1]);
+            console.log(`[DEBUG] Height found via 'size': ${height}`);
+        }
+        else if (boundsMatch) {
+            height = Number.parseFloat(boundsMatch[1]);
+            console.log(`[DEBUG] Height found via 'max_z': ${height}`);
+        } else {
+            console.log(`[DEBUG] ❌ No height found in output!`);
+        }
+
         return { height_mm: height };
     } catch (e) {
+        console.error(`[DEBUG] Info Error: ${e.message}`);
         return { height_mm: 0 };
     }
 }
 
-/**
- * Executes a shell command and returns a promise with stdout and stderr.
- * Uses a larger buffer to accommodate verbose slicer outputs.
- */
 function runCommand(cmd) {
     return new Promise((resolve, reject) => {
         exec(cmd, { maxBuffer: 1024 * 10000 }, (error, stdout, stderr) => {
@@ -272,10 +320,6 @@ function runCommand(cmd) {
     });
 }
 
-/**
- * Parses the slicer output file to extract print time, material usage, and object height.
- * For FDM, it looks for M73 commands or comments. For SLA, it estimates based on height and layer count.
- */
 async function parseOutputDetailed(filePath, technology, layerHeight, knownHeight) {
     const stats = {
         print_time_seconds: 0,
@@ -289,7 +333,7 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
             if (fs.existsSync(filePath)) {
                 const content = fs.readFileSync(filePath, 'utf8');
                 const m73Match = content.match(/M73 P0 R(\d+)/);
-                if (m73Match) stats.print_time_seconds = parseInt(m73Match[1]) * 60;
+                if (m73Match) stats.print_time_seconds = Number.parseInt(m73Match[1]) * 60;
                 
                 if (stats.print_time_seconds === 0) {
                     const timeMatch = content.match(/; estimated printing time = (.*)/i);
@@ -299,7 +343,7 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
                     }
                 }
                 const filMatch = content.match(/; filament used \[mm\] = ([0-9.]+)/i);
-                if (filMatch) stats.material_used_m = parseFloat(filMatch[1]) / 1000;
+                if (filMatch) stats.material_used_m = Number.parseFloat(filMatch[1]) / 1000;
             }
         } catch (e) { console.error("[PARSER ERROR]", e.message); }
     }
@@ -320,21 +364,17 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
     return stats;
 }
 
-/**
- * Parses a time string like "1h 30m" or "90m" into total seconds.
- * If the string is purely numeric, it treats it as minutes.
- */
 function parseTimeString(timeStr) {
     let seconds = 0;
-    if (/^\d+$/.test(timeStr)) return parseInt(timeStr);
+    if (/^\d+$/.test(timeStr)) return Number.parseInt(timeStr);
     const days = timeStr.match(/(\d+)d/);
     const hours = timeStr.match(/(\d+)h/);
     const mins = timeStr.match(/(\d+)m/);
     const secs = timeStr.match(/(\d+)s/);
-    if (days) seconds += parseInt(days[1]) * 86400;
-    if (hours) seconds += parseInt(hours[1]) * 3600;
-    if (mins) seconds += parseInt(mins[1]) * 60;
-    if (secs) seconds += parseInt(secs[1]);
+    if (days) seconds += Number.parseInt(days[1]) * 86400;
+    if (hours) seconds += Number.parseInt(hours[1]) * 3600;
+    if (mins) seconds += Number.parseInt(mins[1]) * 60;
+    if (secs) seconds += Number.parseInt(secs[1]);
     return seconds;
 }
 

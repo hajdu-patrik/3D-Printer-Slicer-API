@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  slicer-api:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+    restart: always

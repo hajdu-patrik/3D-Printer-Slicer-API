@@ -1,0 +1,15 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+
+output/*
+!output/.gitkeep
+configs/*
+input/*
+!input/slicing-helper-files/
+input/slicing-helper-files/*
+!input/slicing-helper-files/.gitkeep
+
+#Temporarily ignore these, but they should be added to the repo later
+README.md

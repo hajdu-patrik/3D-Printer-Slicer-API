@@ -1,0 +1,16 @@
+.git
+.gitignore
+node_modules
+__pycache__
+
+output
+input/archive
+input/cad
+input/direct
+input/image
+input/vector
+
+Dockerfile
+docker-compose.yml
+README.md
+LICENSE.md

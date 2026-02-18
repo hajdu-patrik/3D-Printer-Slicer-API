@@ -34,7 +34,17 @@ def image_to_stl(image_path, output_path, width_mm=100, height_mm=None, depth_mm
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python3 img2stl.py input.jpg output.stl")
+        print("Usage: python3 img2stl.py input.jpg output.stl [depth_mm]")
         sys.exit(1)
     
-    image_to_stl(sys.argv[1], sys.argv[2])
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+
+    depth_val = 3.0
+    if len(sys.argv) > 3:
+        try:
+            depth_val = float(sys.argv[3])
+        except ValueError:
+            pass
+
+    image_to_stl(input_file, output_file, depth_mm=depth_val)

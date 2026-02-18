@@ -2,6 +2,8 @@ version: '3.8'
 services:
   slicer-api:
     build: .
+    image: slicer-api:v1.0
+    container_name: slicer-api-backend-server
     ports:
       - "3000:3000"
     volumes:
@@ -11,4 +13,5 @@ services:
       - ./app/img2stl.py:/app/img2stl.py
       - ./app/vector2stl.py:/app/vector2stl.py
       - ./app/mesh2stl.py:/app/mesh2stl.py
+      - ./app/cad2stl.py:/app/cad2stl.py
     restart: always

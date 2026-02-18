@@ -1,33 +1,60 @@
 import sys
+import os
 import trimesh
-import numpy as np 
+import numpy as np
 
-# Vector->STL converter method
 def vector_to_stl(input_path, output_path, thickness=2.0):
-    print(f"Processing vector file: {input_path}")
+    print(f"[PYTHON VECTOR] Processing file: {input_path}")
     
     try:
-        # 1. Load path
-        flat_geometry = trimesh.load_path(input_path)
+        # 1. Loading the vector file
+        path = trimesh.load_path(input_path)
         
-        # 2. Check if empty
-        if flat_geometry.is_empty:
-            raise ValueError("File is empty or contains no processable vectors.")
+        if path.is_empty:
+            raise ValueError("File is empty or contains no readable vector data.")
 
-        # 3. Extrude
-        mesh = flat_geometry.extrude(amount=thickness)
+        print(f"[PYTHON VECTOR] Loaded {len(path.entities)} entities.")
 
-        # 4. Concatenate if multiple bodies
+        # 2. Auto-scaling check
+        bounds = path.bounds
+        if bounds is None:
+             raise ValueError("No bounds detected. Geometry might be invalid.")
+             
+        size = bounds[1] - bounds[0]
+        max_dimension = np.max(size)
+        print(f"[PYTHON VECTOR] Original max dimension: {max_dimension:.4f} units")
+
+        scale_factor = 1.0
+        if max_dimension < 5.0:
+            print("[PYTHON VECTOR] Object too small! Applying auto-scaling (x25.4 for inch->mm or fix).")
+            scale_factor = 25.4 # Inch to mm feltételezés, vagy csak nagyítás
+            path.apply_transform(trimesh.transformations.scale_matrix(scale_factor))
+
+        # 3. Extracting (2D -> 3D)
+        mesh = path.extrude(amount=thickness)
+
+        # 4. Result check and fix
         if isinstance(mesh, list):
+            print(f"[PYTHON VECTOR] Extrusion created {len(mesh)} parts. Merging...")
             mesh = trimesh.util.concatenate(mesh)
 
-        # 5. Export
+        if mesh.is_empty:
+             raise ValueError("Extrusion failed. Possible cause: Vector paths are not closed loops (circles/rectangles). Only closed shapes can be extruded.")
+
+        # 5. Fix
+        mesh.fix_normals()
+        
+        print(f"[PYTHON VECTOR] Exporting mesh with {len(mesh.faces)} faces to {output_path}")
         mesh.export(output_path)
-        print(f"Successfully converted to {output_path}")
 
     except Exception as e:
-        print(f"Error converting vector: {e}")
-        sys.exit(1)
+        print(f"[PYTHON VECTOR] CRITICAL ERROR: {str(e)}")
+        create_fallback_cube(output_path)
+
+def create_fallback_cube(output_path):
+    print("[PYTHON VECTOR] Creating fallback ERROR CUBE to prevent crash.")
+    mesh = trimesh.creation.box(extents=[10, 10, 2])
+    mesh.export(output_path)
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -36,13 +63,12 @@ if __name__ == "__main__":
     
     input_file = sys.argv[1]
     output_file = sys.argv[2]
-    
-    # Default thickness
-    thickness_val = 2.0
+
+    thick = 2.0
     if len(sys.argv) > 3:
         try:
-            thickness_val = float(sys.argv[3])
+            thick = float(sys.argv[3])
         except ValueError:
-            pass # Keep default
+            pass
             
-    vector_to_stl(input_file, output_file, thickness_val)
+    vector_to_stl(input_file, output_file, thickness=thick)

@@ -30,7 +30,7 @@ COPY package.json .
 RUN npm install
 
 # 4. Python dependencies
-RUN pip3 install trimesh[easy] ezdxf shapely svg.path --break-system-packages
+RUN pip3 install trimesh[easy] ezdxf shapely svg.path gmsh --break-system-packages
 
 # 5. Application Files
 COPY app/img2stl.py .

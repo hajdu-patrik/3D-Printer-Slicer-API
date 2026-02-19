@@ -1,9 +1,11 @@
-![Node.js](https://img.shields.io/badge/Node.js-18.x%2B-339933?style=flat&logo=node.js&logoColor=white)
-![Express](https://img.shields.io/badge/Backend-Express_4.x-000000?style=flat&logo=express&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=flat&logo=python&logoColor=white)
-![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.x-orange?style=flat)
+<img width="2048" height="2048" alt="API-LOGO" src="https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a" />
+
+![Node.js](https://img.shields.io/badge/Node.js-24.13%2B-339933?style=flat&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Express_4.18.2-000000?style=flat&logo=express&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=flat&logo=python&logoColor=white)
+![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.1-orange?style=flat)
 ![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
-![Swagger](https://img.shields.io/badge/API_Docs-Swagger_OpenAPI-85EA2D?style=flat&logo=swagger&logoColor=black)
+![Swagger](https://img.shields.io/badge/API_Docs-swagger--ui--express_5.0.0-85EA2D?style=flat&logo=swagger&logoColor=black)
 ![Deployment](https://img.shields.io/badge/Deployment-VPS_24%2F7-4CAF50?style=flat&logo=linux&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Live_Production-success?style=flat)
 

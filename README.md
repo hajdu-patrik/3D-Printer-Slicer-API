@@ -1,3 +1,13 @@
+![Node.js](https://img.shields.io/badge/Node.js-18.x%2B-339933?style=flat&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Express_4.x-000000?style=flat&logo=express&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.x-3776AB?style=flat&logo=python&logoColor=white)
+![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.x-orange?style=flat)
+![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![Swagger](https://img.shields.io/badge/API_Docs-Swagger_OpenAPI-85EA2D?style=flat&logo=swagger&logoColor=black)
+![Deployment](https://img.shields.io/badge/Deployment-VPS_24%2F7-4CAF50?style=flat&logo=linux&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Live_Production-success?style=flat)
+
+
 # 3D Printer Slicer & Pricing API (FDM & SLA)
 
 An automated 3D slicing and pricing API built with `Node.js` and `Python` that seamlessly converts various 2D and 3D file formats into ready-to-print models using the PrusaSlicer engine. It provides automated part orientation, intelligent slicing, and dynamic cost estimation for both **FDM** and **SLA** printing technologies.

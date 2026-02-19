@@ -1,16 +1,37 @@
-.git
+# 1. Version Control
+.git/
 .gitignore
-node_modules
-__pycache__
 
-output
-input/archive
-input/cad
-input/direct
-input/image
-input/vector
+# 2. Dependencies and Cache
+node_modules/
+__pycache__/
+*.pyc
 
+# 3. Environment Variables
+.env
+.env.*
+*.env
+
+# 4. IDE and Editor files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# 5. Application-specific files
+output/
+!output/.gitkeep
+input/archive/
+input/cad/
+input/direct/
+input/image/
+input/vector/
+logs/
+
+# 6. Docker configuration files
 Dockerfile
 docker-compose.yml
+
+# 7. Documentation and License
 README.md
 LICENSE.md

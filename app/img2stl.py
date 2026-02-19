@@ -12,8 +12,7 @@ def image_to_stl(input_path, output_path, depth_mm=3.0, base_mm=0.5):
         img = Image.open(input_path).convert('L') 
         
         # 2. Resize if too large (Optimization)
-        # Large images generate millions of triangles, slowing down slicing significantly.
-        max_dim = 300 # Limit width/height to 300px
+        max_dim = 300
         if img.width > max_dim or img.height > max_dim:
             img.thumbnail((max_dim, max_dim))
             print(f"[PYTHON IMG] Resized image to {img.width}x{img.height} for performance.")
@@ -21,43 +20,32 @@ def image_to_stl(input_path, output_path, depth_mm=3.0, base_mm=0.5):
         # 3. Process Pixel Data
         img_array = np.array(img)
         height, width = img_array.shape
-        
-        # Calculate pixel size to achieve a reasonable physical width (e.g., 100mm wide)
+
         target_width_mm = 100.0
         pixel_size_mm = target_width_mm / width
         
         print(f"[PYTHON IMG] Physical dimensions will be approx: {target_width_mm:.2f}mm width.")
 
         # 4. Generate Vertex Grid
-        # Create a grid of X, Y coordinates
         x = np.arange(0, width) * pixel_size_mm
         y = np.arange(0, height) * pixel_size_mm
-        X, Y = np.meshgrid(x, y[::-1]) # Flip Y so image isn't upside down
-        
-        # Calculate Z height based on brightness
-        # Invert: Dark = Thick (Base + Depth), Light = Thin (Base)
-        # 255 (White) -> 0 depth, 0 (Black) -> max depth
+        X, Y = np.meshgrid(x, y[::-1])
+
         z_data = (255 - img_array) / 255.0 
         Z = base_mm + (z_data * depth_mm)
         
-        # Flatten arrays to create vertex list
         vertices = np.column_stack((X.flatten(), Y.flatten(), Z.flatten()))
         
         # 5. Generate Faces (Triangulation)
-        # We need to connect the grid points into triangles.
-        # Two triangles per pixel square.
         faces = []
         for r in range(height - 1):
             for c in range(width - 1):
-                # Calculate indices in the flattened vertex array
-                tl = r * width + c       # Top-Left
-                tr = r * width + (c + 1) # Top-Right
-                bl = (r + 1) * width + c # Bottom-Left
-                br = (r + 1) * width + (c + 1) # Bottom-Right
+                tl = r * width + c
+                tr = r * width + (c + 1)
+                bl = (r + 1) * width + c
+                br = (r + 1) * width + (c + 1)
                 
-                # Triangle 1
                 faces.append([bl, tr, tl])
-                # Triangle 2
                 faces.append([bl, br, tr])
                 
         faces = np.array(faces)
@@ -66,10 +54,8 @@ def image_to_stl(input_path, output_path, depth_mm=3.0, base_mm=0.5):
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         
         # 7. Post-Processing
-        # Fix normals (ensures outside is outside)
         mesh.fix_normals()
         
-        # Center the mesh and put it on the floor (Z=0)
         mesh.apply_translation(-mesh.centroid)
         min_z = mesh.bounds[0][2]
         mesh.apply_translation([0, 0, -min_z])

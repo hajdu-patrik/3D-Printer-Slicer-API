@@ -1,15 +1,18 @@
+# Ignore node modules, Python cache files, and environment variables
 node_modules/
 __pycache__/
 *.pyc
 .env
 
+# Ignore test files and logs
 /tests
 /logs
 
-output/*
-!output/.gitkeep
+# Ignore configuration and data files, but keep .gitkeep for empty directories
 configs/*
-input/*
+!configs/.gitkeep
+!configs/pricing.json
+/input/*
+/output/*
 
-#Temporarily ignore these, but they should be added to the repo later
-README.md
+ADMIN_API_KEY.env

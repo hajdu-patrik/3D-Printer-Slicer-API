@@ -4,6 +4,8 @@ services:
     build: .
     image: slicer-api:v1.0
     container_name: slicer-api-backend-server
+    environment:
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -16,6 +18,7 @@ services:
       - ./configs:/app/configs
       
       # --- Codes ---
+      - ./app/static:/app/static
       - ./app/server.js:/app/server.js
       - ./app/img2stl.py:/app/img2stl.py
       - ./app/vector2stl.py:/app/vector2stl.py

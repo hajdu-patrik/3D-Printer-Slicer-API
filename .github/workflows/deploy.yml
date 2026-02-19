@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
 
 jobs:
   deploy:
@@ -20,5 +19,12 @@ jobs:
           script: |
             cd ~/3D-Printer-Slicer-API-for-FDM-and-SLA_JS
             git pull origin main
-            sudo docker-compose down
-            sudo docker-compose up -d --build
+            
+            # 1. Step: Build the new Docker image. This will use the updated code from the git pull. The build process will be cached, so only changed layers will be rebuilt, making it faster.
+            sudo docker-compose build
+            
+            # 2. Step: Restart the container with the new image. The -d flag runs the container in detached mode, so it will run in the background.
+            sudo docker-compose up -d
+            
+            # 3. Step: Resource management. Remove old, unused ("dangling") images to prevent filling up the VPS disk space.
+            sudo docker image prune -f

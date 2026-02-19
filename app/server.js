@@ -6,6 +6,7 @@ const path = require('path');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 
+// --- SERVER SETUP ---
 const app = express();
 app.use(cors());
 
@@ -13,19 +14,61 @@ app.use(cors());
 app.use('/download', express.static(path.join(__dirname, 'output')));
 
 // Directories setup
-const HELP_FILES_DIR = path.join(__dirname, 'input', 'slicing-helper-files');
+const HELP_FILES_DIR = path.join(__dirname, 'input');
 const OUTPUT_DIR = path.join(__dirname, 'output');
+const LOGS_DIR = path.join(__dirname, 'logs');
+
+// Ensure necessary directories exist
 if (!fs.existsSync(HELP_FILES_DIR)) fs.mkdirSync(HELP_FILES_DIR, { recursive: true });
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR, { recursive: true });
 
-const upload = multer({ dest: HELP_FILES_DIR });
+// Multer setup for file uploads
+const upload = multer({ 
+    dest: HELP_FILES_DIR,
+    limits: { 
+        fileSize: 1024 * 1024 * 1024
+    } 
+});
+
+
+// --- LOGGER FUNCTION ---
+function logError(errorData) {
+    const logFile = path.join(LOGS_DIR, 'log.json');
+    const now = new Date();
+    
+    const newLogEntry = {
+        timestamp: now.toISOString(),
+        error: errorData.message || 'Unknown Error',
+        details: errorData.stderr || errorData.stack || 'No details',
+        path: errorData.path || 'N/A'
+    };
+
+    let logs = [];
+    
+    if (fs.existsSync(logFile)) {
+        try {
+            const fileContent = fs.readFileSync(logFile, 'utf8');
+            logs = JSON.parse(fileContent);
+        } catch (err) {
+            console.error("Error reading log file, starting fresh.");
+        }
+    }
+
+    logs.push(newLogEntry);
+
+    const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+    logs = logs.filter(log => new Date(log.timestamp) > sevenDaysAgo);
+
+    fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
+}
 
 
 // --- SWAGGER DOCUMENTATION ---
 const swaggerDocument = {
   openapi: '3.0.0',
   info: {
-    title: 'FDM and SLA Slicer API',
+    title: '3D Printer Slicer API for FDM and SLA',
     version: '1.0.0',
     description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
   },
@@ -102,6 +145,7 @@ const swaggerDocument = {
   }
 };
 
+// Serve Swagger UI
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.get('/', (req, res) => res.redirect('/docs'));
 
@@ -124,11 +168,6 @@ const EXTENSIONS = {
 
 
 // --- HELPER FUNCTIONS ---
-
-/**
- * Executes a shell command and returns a Promise.
- * Captures stderr for better error reporting.
- */
 function runCommand(cmd) {
     return new Promise((resolve, reject) => {
         exec(cmd, { maxBuffer: 1024 * 10000 }, (error, stdout, stderr) => {
@@ -146,6 +185,7 @@ function runCommand(cmd) {
     });
 }
 
+
 async function getModelInfo(filePath) {
     try {
         const { stdout } = await runCommand(`prusa-slicer --info "${filePath}"`);
@@ -162,6 +202,7 @@ async function getModelInfo(filePath) {
         return { height_mm: 0 };
     }
 }
+
 
 async function parseOutputDetailed(filePath, technology, layerHeight, knownHeight) {
     const stats = {
@@ -212,6 +253,7 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
     return stats;
 }
 
+
 function parseTimeString(timeStr) {
     let seconds = 0;
     if (/^\d+$/.test(timeStr)) return parseInt(timeStr);
@@ -227,6 +269,25 @@ function parseTimeString(timeStr) {
 }
 
 
+function cleanupFiles(fileList) {
+    fileList.forEach(file => {
+        if (file && fs.existsSync(file)) {
+            try {
+                if (fs.lstatSync(file).isDirectory()) {
+                    fs.rmSync(file, { recursive: true, force: true });
+                    console.log(`[CLEANUP] Deleted directory: ${file}`);
+                } else {
+                    fs.unlinkSync(file);
+                    console.log(`[CLEANUP] Deleted file: ${file}`);
+                }
+            } catch (err) {
+                console.error(`[CLEANUP ERROR] Could not delete ${file}: ${err.message}`);
+            }
+        }
+    });
+}
+
+
 // --- MAIN ROUTE ---
 app.post('/slice', upload.any(), async (req, res) => {
     // 1. File Upload Handling
@@ -237,10 +298,11 @@ app.post('/slice', upload.any(), async (req, res) => {
     const originalName = file.originalname.toLowerCase();
     let originalExt = path.extname(originalName);
 
-    // Rename uploaded file to keep extension (important for tools)
     const tempFileWithExt = inputFile + originalExt;
     fs.renameSync(inputFile, tempFileWithExt);
     inputFile = tempFileWithExt;
+
+    let filesCleanupList = [inputFile]; 
 
     // 2. Parameters
     const layerHeight = parseFloat(req.body.layerHeight || '0.2');
@@ -268,6 +330,8 @@ app.post('/slice', upload.any(), async (req, res) => {
             unzipDir = path.join(path.dirname(inputFile), `unzip_${Date.now()}`);
             if (!fs.existsSync(unzipDir)) fs.mkdirSync(unzipDir);
             
+            filesCleanupList.push(unzipDir);
+
             await runCommand(`unzip -o "${inputFile}" -d "${unzipDir}"`);
             
             const files = fs.readdirSync(unzipDir);
@@ -288,24 +352,28 @@ app.post('/slice', upload.any(), async (req, res) => {
         if (EXTENSIONS.image.includes(currentExt)) {
             console.log(`[INFO] Converting Image to STL (Depth: ${depth}mm)...`);
             finalStlPath = processableFile + '.stl';
+            filesCleanupList.push(finalStlPath);
             await runCommand(`python3 img2stl.py "${processableFile}" "${finalStlPath}" ${depth}`);
         }
         // 2. Vector -> STL
         else if (EXTENSIONS.vector.includes(currentExt)) {
             console.log(`[INFO] Converting Vector to STL (Depth: ${depth}mm)...`);
             finalStlPath = processableFile + '.stl';
+            filesCleanupList.push(finalStlPath);
             await runCommand(`python3 vector2stl.py "${processableFile}" "${finalStlPath}" ${depth}`);
         }
         // 3. Mesh Formats (OBJ, 3MF) -> STL
         else if (['.obj', '.3mf', '.ply'].includes(currentExt)) {
             console.log(`[INFO] Converting Mesh to STL...`);
             finalStlPath = processableFile + '.stl';
+            filesCleanupList.push(finalStlPath);
             await runCommand(`python3 mesh2stl.py "${processableFile}" "${finalStlPath}"`);
         }
         // 4. CAD (STEP, IGES) -> STL (Gmsh)
         else if (EXTENSIONS.cad.includes(currentExt)) {
             console.log(`[INFO] Converting CAD to STL...`);
             finalStlPath = processableFile + '.stl';
+            filesCleanupList.push(finalStlPath);
             await runCommand(`python3 cad2stl.py "${processableFile}" "${finalStlPath}"`);
         }
         // 5. Already STL
@@ -315,10 +383,26 @@ app.post('/slice', upload.any(), async (req, res) => {
 
         processableFile = finalStlPath;
 
-        // --- STEP C: GET MODEL INFO ---
+        // --- STEP C: ORIENTATION OPTIMATIZATION ---
+        console.log(`[INFO] Optimizing orientation for ${technology}...`);
+        
+        const orientedStlPath = processableFile.replace('.stl', '_oriented.stl');
+        
+        try {
+            await runCommand(`python3 orient.py "${processableFile}" "${orientedStlPath}" ${technology}`);
+            
+            if (fs.existsSync(orientedStlPath)) {
+                filesCleanupList.push(orientedStlPath);
+                processableFile = orientedStlPath;
+            }
+        } catch (orientErr) {
+            console.warn(`[WARN] Orientation optimization failed, proceeding with original. Error: ${orientErr.message}`);
+        }
+
+        // --- STEP D: GET MODEL INFO ---
         const modelInfo = await getModelInfo(processableFile);
 
-        // --- STEP D: SLICING ---
+        // --- STEP E: SLICING ---
         const outputFilename = `output-${Date.now()}.${technology === 'SLA' ? 'sl1' : 'gcode'}`;
         const outputPath = path.join(OUTPUT_DIR, outputFilename);
         const configFile = path.join(__dirname, 'configs', `${technology}_${layerHeight}mm.ini`);
@@ -328,15 +412,19 @@ app.post('/slice', upload.any(), async (req, res) => {
         console.log(`[INFO] Slicing with ${path.basename(configFile)}...`);
         
         let slicerArgs = `--load "${configFile}"`;
+
+        slicerArgs += ` --center 100,100`;
+
         if (technology === 'SLA') {
             slicerArgs += ` --export-sla --output "${outputPath}"`;
         } else {
+            slicerArgs += ` --support-material --support-material-auto`;
             slicerArgs += ` --gcode-flavor marlin --export-gcode --output "${outputPath}" --fill-density ${infillPercentage}`;
         }
 
         await runCommand(`prusa-slicer ${slicerArgs} "${processableFile}"`);
 
-        // --- STEP E: PRICING & STATS ---
+        // --- STEP F: PRICING & STATS ---
         const stats = await parseOutputDetailed(outputPath, technology, layerHeight, modelInfo.height_mm);
         
         const hourlyRate = (PRICING[technology][material]) || PRICING[technology].default;
@@ -344,19 +432,10 @@ app.post('/slice', upload.any(), async (req, res) => {
         
         // Minimum 15 minutes charge
         const calcHours = Math.max(printHours, 0.25); 
-        const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10; // Round to 10 HUF
+        const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10;
 
         // --- CLEANUP ---
-        try {
-            if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
-            if (unzipDir && fs.existsSync(unzipDir)) fs.rmSync(unzipDir, { recursive: true, force: true });
-            
-            // Cleanup generated STLs from conversion
-            if (processableFile !== inputFile && fs.existsSync(processableFile) && !processableFile.includes('unzip')) {
-                fs.unlinkSync(processableFile);
-            }
-        } catch (e) { console.warn("[CLEANUP WARN]", e.message); }
-
+        cleanupFiles(filesCleanupList);
 
         // --- RESPONSE ---
         res.json({
@@ -371,20 +450,34 @@ app.post('/slice', upload.any(), async (req, res) => {
             },
             download_url: `/download/${outputFilename}`
         });
-
     } catch (err) {
-        console.error("[CRITICAL ERROR]", err);
-        // Clean up main input file on error
-        if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
-        
+        console.error("[CRITICAL ERROR]", err.message);
+
+        cleanupFiles(filesCleanupList);
+
+        logError({
+            message: err.message,
+            stderr: err.stderr,
+            stack: err.stack,
+            path: inputFile
+        });
+
         res.status(500).json({ 
-            error: err.message, 
-            details: err.stderr || "Check server logs for more details." 
+            success: false,
+            error: "Slicing failed. The error has been logged for review.",
+            errorCode: "INTERNAL_PROCESSING_ERROR" 
         });
     }
 });
 
 
+// Redirect all other routes to Swagger Docs
+app.use('*', (req, res) => {
+    res.redirect('/docs');
+});
+
+
+// Start the server
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`FDM and SLA Slicer Engine running on port ${PORT}`);

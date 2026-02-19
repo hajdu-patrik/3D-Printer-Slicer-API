@@ -5,13 +5,21 @@ services:
     image: slicer-api:v1.0
     container_name: slicer-api-backend-server
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
+      # --- Datas & Logs ---
       - ./input:/app/input
       - ./output:/app/output
+      - ./logs:/app/logs
+      
+      # --- Configurations ---
+      - ./configs:/app/configs
+      
+      # --- Codes ---
       - ./app/server.js:/app/server.js
       - ./app/img2stl.py:/app/img2stl.py
       - ./app/vector2stl.py:/app/vector2stl.py
       - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/cad2stl.py:/app/cad2stl.py
-    restart: always
+      - ./app/orient.py:/app/orient.py
+    restart: unless-stopped

@@ -3,13 +3,13 @@ __pycache__/
 *.pyc
 .env
 
+/tests
+/logs
+
 output/*
 !output/.gitkeep
 configs/*
 input/*
-!input/slicing-helper-files/
-input/slicing-helper-files/*
-!input/slicing-helper-files/.gitkeep
 
 #Temporarily ignore these, but they should be added to the repo later
 README.md

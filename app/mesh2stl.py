@@ -26,9 +26,10 @@ def convert_mesh_to_stl(input_path, output_path):
         print(f"[PYTHON] Error converting mesh: {e}")
         sys.exit(1)
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python3 mesh2stl.py input.obj output.stl")
+        print("Usage: python3 mesh2stl.py input.(obj|3mf) output.stl")
         sys.exit(1)
 
     convert_mesh_to_stl(sys.argv[1], sys.argv[2])

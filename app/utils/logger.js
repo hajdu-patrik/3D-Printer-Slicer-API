@@ -1,7 +1,16 @@
-const fs = require('fs');
-const path = require('path');
+/**
+ * Structured error logger with rolling retention.
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
 const { LOGS_DIR } = require('../config/paths');
 
+/**
+ * Append an error entry to log storage and prune entries older than seven days.
+ * @param {{message?: string, stderr?: string, stack?: string, path?: string}} errorData Error payload.
+ * @returns {void}
+ */
 function logError(errorData) {
     const logFile = path.join(LOGS_DIR, 'log.json');
     const now = new Date();
@@ -20,7 +29,7 @@ function logError(errorData) {
             const fileContent = fs.readFileSync(logFile, 'utf8');
             logs = JSON.parse(fileContent);
         } catch (err) {
-            console.error('Error reading log file, starting fresh.');
+            console.error(`Error reading log file, starting fresh: ${err.message}`);
         }
     }
 

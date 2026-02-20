@@ -1,15 +1,20 @@
+/**
+ * API server bootstrap for slicing, pricing, health, and Swagger endpoints.
+ */
+
 const express = require('express');
-const path = require('path');
+const path = require('node:path');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./docs/swagger-docs');
+const createSwaggerDocument = require('./docs/swagger-docs');
 const pricingRoutes = require('./routes/pricing.routes');
 const sliceRoutes = require('./routes/slice.routes');
 const systemRoutes = require('./routes/system.routes');
 const { PORT } = require('./config/constants');
 const { OUTPUT_DIR, ensureRequiredDirectories } = require('./config/paths');
-const { loadPricingFromDisk } = require('./services/pricing.service');
+const { loadPricingFromDisk, getPricing } = require('./services/pricing.service');
 
+// Security check for critical environment variables
 if (!process.env.ADMIN_API_KEY) {
     console.error('[SECURITY] ADMIN_API_KEY is missing. Refusing to start server.');
     process.exit(1);
@@ -19,7 +24,7 @@ if (!process.env.ADMIN_API_KEY) {
 ensureRequiredDirectories();
 loadPricingFromDisk();
 
-// Initialize Express app
+/** @type {import('express').Express} */
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -28,15 +33,22 @@ app.use(express.json());
 app.use('/download', express.static(path.join(OUTPUT_DIR)));
 
 // Swagger UI setup
+const swaggerUiOptions = {
+    swaggerOptions: {
+        docExpansion: 'none',
+        operationsSorter: 'method',
+        defaultModelsExpandDepth: -1
+    },
+    customCss: '.parameters-col_description .parameter__in { display: none !important; }'
+};
+
 app.use(
     '/docs',
     swaggerUi.serve,
-    swaggerUi.setup(swaggerDocument, {
-        swaggerOptions: {
-            docExpansion: 'full',
-            defaultModelsExpandDepth: -1
-        }
-    })
+    (req, res, next) => {
+        const dynamicSwaggerDocument = createSwaggerDocument(getPricing());
+        return swaggerUi.setup(dynamicSwaggerDocument, swaggerUiOptions)(req, res, next);
+    }
 );
 app.get('/', (req, res) => res.redirect('/docs'));
 

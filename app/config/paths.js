@@ -1,5 +1,9 @@
-const fs = require('fs');
-const path = require('path');
+/**
+ * Filesystem path configuration used by the API and converter scripts.
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
 
 const APP_ROOT = path.resolve(__dirname, '..');
 const HELP_FILES_DIR = path.join(APP_ROOT, 'input');
@@ -8,6 +12,10 @@ const LOGS_DIR = path.join(APP_ROOT, 'logs');
 const CONFIGS_DIR = path.join(APP_ROOT, 'configs');
 const PRICING_FILE = path.join(CONFIGS_DIR, 'pricing.json');
 
+/**
+ * Ensure all runtime directories exist before processing requests.
+ * @returns {void}
+ */
 function ensureRequiredDirectories() {
     if (!fs.existsSync(HELP_FILES_DIR)) fs.mkdirSync(HELP_FILES_DIR, { recursive: true });
     if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });

@@ -1,3 +1,9 @@
+"""Image-to-STL converter.
+
+Builds a grayscale heightmap mesh from raster images and exports STL output
+for slicing workflows.
+"""
+
 import sys
 import os
 import numpy as np
@@ -5,6 +11,20 @@ from PIL import Image
 import trimesh
 
 def image_to_stl(input_path, output_path, depth_mm=3.0, base_mm=0.5):
+    """Convert a raster image to an STL heightmap mesh.
+
+    Args:
+        input_path: Path to input image (.jpg, .jpeg, .png, .bmp).
+        output_path: Destination STL output path.
+        depth_mm: Maximum emboss depth applied from pixel intensity.
+        base_mm: Minimum base thickness for the generated mesh.
+
+    Returns:
+        None. Writes STL output to disk.
+
+    Raises:
+        SystemExit: If conversion fails.
+    """
     print(f"[PYTHON IMG] Processing image: {input_path}")
     
     try:

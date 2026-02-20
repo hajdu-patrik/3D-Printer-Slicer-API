@@ -1,5 +1,16 @@
+/**
+ * Middleware that validates admin API key access for protected routes.
+ */
+
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
+/**
+ * Enforce `x-api-key` based authentication for admin operations.
+ * @param {import('express').Request} req Express request object.
+ * @param {import('express').Response} res Express response object.
+ * @param {import('express').NextFunction} next Express next callback.
+ * @returns {void}
+ */
 function requireAdmin(req, res, next) {
     if (!ADMIN_API_KEY) {
         console.error('[SECURITY WARNING] ADMIN_API_KEY is not configured. Protected pricing endpoints are disabled.');

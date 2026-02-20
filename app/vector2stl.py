@@ -1,20 +1,36 @@
+"""Vector-to-STL converter.
+
+Converts closed 2D vector geometry into extruded STL meshes while preserving
+source fidelity by rejecting invalid or open geometry.
+"""
+
 import sys
 import os
 import trimesh
-import numpy as np
 import subprocess
-from shapely.geometry import Polygon, MultiPolygon, LineString, LinearRing
-from shapely.ops import unary_union, polygonize
-from shapely.validation import make_valid
+from shapely.geometry import MultiPolygon
 
 def vector_to_stl(input_path, output_path, depth_mm=2.0):
+    """Convert vector geometry to STL by linear extrusion.
+
+    Args:
+        input_path: Path to input vector file (.dxf, .svg, .eps, .pdf).
+        output_path: Destination STL output path.
+        depth_mm: Extrusion depth in millimeters.
+
+    Returns:
+        None. Writes STL output to disk.
+
+    Raises:
+        SystemExit: If input geometry is invalid or conversion fails.
+    """
     print(f"[PYTHON VECTOR] Processing: {input_path}")
     
     processing_path = input_path
     temp_dxf = None
 
     try:
-        # 1. EPS ando PDF handling
+        # 1. EPS and PDF handling
         if input_path.lower().endswith(('.eps', '.pdf')):
             print(f"[PYTHON VECTOR] {os.path.splitext(input_path)[1]} detected. Converting to DXF using pstoedit...")
             temp_dxf = input_path + ".converted.dxf"
@@ -58,48 +74,36 @@ def vector_to_stl(input_path, output_path, depth_mm=2.0):
                 polygons = list(path.polygons_full)
                 if not polygons:
                     polygons = list(path.polygons_closed)
-            except:
+            except Exception:
                 pass
 
             if not polygons:
-                lines = []
-                for entity in path.entities:
-                    pts = entity.discrete(path.vertices)
-                    if len(pts) > 1:
-                        lines.append(LineString(pts))
-                
-                try:
-                    polygons = list(polygonize(lines))
-                except:
-                    pass
-
-                if not polygons and lines:
-                    print(f"[PYTHON VECTOR] No closed shapes found. Thickening {len(lines)} open lines...")
-                    line_thickness = 0.8 
-                    for line in lines:
-                        thick_line = line.buffer(line_thickness / 2, cap_style=1, join_style=1)
-                        polygons.append(thick_line)
+                raise ValueError("No closed 2D geometry found. Open paths/lines are not auto-fixed.")
 
             for poly in polygons:
                 try:
-                    if not poly.is_valid:
-                        poly = make_valid(poly)
-                    
-                    clean_poly = poly.buffer(0)
-                    if clean_poly.is_empty: continue
+                    if poly.is_empty:
+                        continue
 
-                    if isinstance(clean_poly, MultiPolygon):
-                        sub_polys = clean_poly.geoms
+                    if not poly.is_valid:
+                        raise ValueError("Invalid polygon geometry found. Auto-repair is disabled.")
+
+                    if isinstance(poly, MultiPolygon):
+                        sub_polys = poly.geoms
                     else:
-                        sub_polys = [clean_poly]
+                        sub_polys = [poly]
 
                     for p in sub_polys:
+                        if p.is_empty:
+                            continue
+                        if not p.is_valid:
+                            raise ValueError("Invalid polygon geometry found. Auto-repair is disabled.")
                         mesh = trimesh.creation.extrude_polygon(p, height=depth_mm)
                         if not mesh.is_empty:
                             extruded_meshes.append(mesh)
 
                 except Exception as ex:
-                    continue
+                    raise ValueError(f"Failed to extrude vector geometry without modifications: {str(ex)}")
 
         if not extruded_meshes:
             raise ValueError("Could not create ANY geometry. File is likely empty or unreadable.")
@@ -107,27 +111,12 @@ def vector_to_stl(input_path, output_path, depth_mm=2.0):
         # 4. Merging
         combined_mesh = trimesh.util.concatenate(extruded_meshes)
 
-        # 5. Scaling
-        bbox = combined_mesh.bounds
-        size = bbox[1] - bbox[0]
-        max_dim = np.max(size)
-        
-        print(f"[PYTHON VECTOR] Raw Size: {size[0]:.2f} x {size[1]:.2f} mm")
-
-        if max_dim < 15.0:
-            target = 100.0
-            scale = target / max_dim
-            print(f"[PYTHON VECTOR] Scaling up x{scale:.2f}")
-            combined_mesh.apply_scale(scale)
-        elif max_dim < 50.0:
-            combined_mesh.apply_scale(25.4)
-
-        # 6. Positioning
+        # 5. Positioning
         combined_mesh.apply_translation(-combined_mesh.centroid)
         min_z = combined_mesh.bounds[0][2]
         combined_mesh.apply_translation([0, 0, -min_z])
 
-        # 7. Save
+        # 6. Save
         combined_mesh.export(output_path)
         print(f"[PYTHON VECTOR] Success! Exported to {output_path}")
 
@@ -137,8 +126,10 @@ def vector_to_stl(input_path, output_path, depth_mm=2.0):
         
     finally:
         if temp_dxf and os.path.exists(temp_dxf):
-            try: os.remove(temp_dxf)
-            except: pass
+            try:
+                os.remove(temp_dxf)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":
@@ -148,7 +139,9 @@ if __name__ == "__main__":
     
     depth = 2.0
     if len(sys.argv) > 3:
-        try: depth = float(sys.argv[3])
-        except: pass
+        try:
+            depth = float(sys.argv[3])
+        except ValueError:
+            pass
             
     vector_to_stl(sys.argv[1], sys.argv[2], depth)

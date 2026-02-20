@@ -1,9 +1,26 @@
+"""Orientation optimizer for STL models.
+
+Finds a stable orientation that minimizes print height and exports an
+orientation-adjusted STL model.
+"""
+
 import sys
-import os
-import numpy as np
 import trimesh
 
 def optimize_orientation(input_path, output_path, technology='FDM'):
+    """Optimize model orientation for printing.
+
+    Args:
+        input_path: Path to source STL file.
+        output_path: Destination STL output path.
+        technology: Printing technology label (FDM or SLA).
+
+    Returns:
+        None. Writes oriented STL output to disk.
+
+    Raises:
+        SystemExit: If optimization fails after fallback copy.
+    """
     print(f"[PYTHON ORIENT] Analyzing orientation for {technology}: {input_path}")
     
     try:
@@ -20,7 +37,7 @@ def optimize_orientation(input_path, output_path, technology='FDM'):
 
         # 3. Compute stable poses
         try:
-            poses, probabilities = mesh.compute_stable_poses(n_samples=5, threshold=0.02)
+            poses, _ = mesh.compute_stable_poses(n_samples=5, threshold=0.02)
         except Exception as e:
             print(f"[PYTHON ORIENT] Warning: Could not compute stable poses ({e}). Keeping original.")
             poses = []
@@ -41,8 +58,6 @@ def optimize_orientation(input_path, output_path, technology='FDM'):
             temp_mesh.apply_transform(tf)
             
             z_height = temp_mesh.extents[2]
-            width_x = temp_mesh.extents[0]
-            depth_y = temp_mesh.extents[1]
             
             score = z_height 
 

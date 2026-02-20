@@ -1,10 +1,27 @@
+"""CAD-to-STL conversion utility.
+
+Converts supported CAD interchange formats into STL meshes without applying
+automatic geometry healing or shape correction to preserve source fidelity.
+"""
+
 import sys
 import os
 import shutil
 import gmsh
-import math
 
 def convert_cad_to_stl(input_path, output_path):
+    """Convert a CAD file to STL format.
+
+    Args:
+        input_path: Path to the source CAD file (.iges, .igs, .step, .stp).
+        output_path: Destination STL output path.
+
+    Returns:
+        None. Writes STL output to disk.
+
+    Raises:
+        SystemExit: If conversion fails or source file is invalid.
+    """
     input_abs_path = os.path.abspath(input_path)
     output_abs_path = os.path.abspath(output_path)
     
@@ -23,9 +40,9 @@ def convert_cad_to_stl(input_path, output_path):
                 if "<!DOCTYPE html" in text_header or "<html" in text_header:
                     print("[PYTHON CAD] CRITICAL ERROR: The file header contains HTML tags.")
                     raise ValueError("Invalid file format! You uploaded a downloaded WEBPAGE (HTML), not a CAD file.")
-            except:
+            except UnicodeDecodeError:
                 pass
-    except Exception as e:
+    except Exception:
         pass
 
     # 2. File extension handling
@@ -39,49 +56,20 @@ def convert_cad_to_stl(input_path, output_path):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("General.Verbosity", 2)
 
-        gmsh.option.setNumber("Geometry.Tolerance", 1e-3) 
-        gmsh.option.setNumber("Geometry.OCCFixSmallEdges", 1)
-        gmsh.option.setNumber("Geometry.OCCFixSmallFaces", 1)
-        gmsh.option.setNumber("Geometry.OCCSewFaces", 1)
-
         # 3. Loading and merging
-        print(f"[PYTHON CAD] Merging file...")
+        print("[PYTHON CAD] Merging file...")
         gmsh.merge(temp_igs_path)
-        
-        # 4. Healing
-        print("[PYTHON CAD] Healing geometry...")
-        entities = gmsh.model.getEntities()
-        try:
-            gmsh.model.occ.healShapes(entities, tolerance=1e-3)
-        except:
-            pass
-            
+
+        # 4. Synchronize imported geometry
         gmsh.model.occ.synchronize()
 
-        # 5. Scaling check
-        bbox = gmsh.model.getBoundingBox(-1, -1)
-        if len(bbox) > 0:
-            dx = bbox[3] - bbox[0]
-            dy = bbox[4] - bbox[1]
-            dz = bbox[5] - bbox[2]
-            max_dim = max(dx, dy, dz)
-            print(f"[PYTHON CAD] Dimensions: {dx:.2f} x {dy:.2f} x {dz:.2f}")
-
-            if max_dim < 5.0 and max_dim > 0.001:
-                print("[PYTHON CAD] Scaling x1000...")
-                gmsh.model.occ.dilate(entities, 0, 0, 0, 1000, 1000, 1000)
-                gmsh.model.occ.synchronize()
-
-        # 6. Exporting to STL
+        # 5. Exporting to STL
         gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5)
         gmsh.option.setNumber("Mesh.MeshSizeMax", 5.0)
 
-        try:
-            gmsh.model.mesh.generate(2)
-        except Exception as e:
-            print(f"[PYTHON CAD] Mesh generation failed ({str(e)}). Trying direct STL export...")
+        gmsh.model.mesh.generate(2)
         
-        # 7. Save
+        # 6. Save
         gmsh.write(output_abs_path)
         gmsh.finalize()
         print(f"[PYTHON CAD] Success! Exported to {output_abs_path}")

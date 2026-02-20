@@ -1,16 +1,34 @@
-const { exec } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+/**
+ * End-to-end slicing service:
+ * file intake, conversion, orientation, slicing, estimation, and response mapping.
+ */
+
+const { exec } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 const { MAX_BUILD_VOLUMES, EXTENSIONS } = require('../config/constants');
 const { OUTPUT_DIR, CONFIGS_DIR } = require('../config/paths');
 const { logError } = require('../utils/logger');
 const { getRate } = require('./pricing.service');
 
+const DEBUG_COMMAND_LOGS = process.env.DEBUG_COMMAND_LOGS === 'true';
+const MAX_LOG_OUTPUT = 4000;
+
+function truncateLogOutput(text) {
+    if (!text || text.length <= MAX_LOG_OUTPUT) return text;
+    return `${text.slice(0, MAX_LOG_OUTPUT)}\n...[truncated]`;
+}
+
+/**
+ * Execute shell command with bounded timeout and buffer.
+ * @param {string} cmd Command line to execute.
+ * @returns {Promise<{stdout: string, stderr: string}>} Command output streams.
+ */
 function runCommand(cmd) {
     return new Promise((resolve, reject) => {
         exec(cmd, { maxBuffer: 1024 * 10000, timeout: 600000 }, (error, stdout, stderr) => {
-            if (stdout) console.log(`[CMD LOG]:\n${stdout}`);
-            if (stderr) console.error(`[CMD ERR]:\n${stderr}`);
+            if (DEBUG_COMMAND_LOGS && stdout) console.log(`[CMD LOG]:\n${truncateLogOutput(stdout)}`);
+            if (DEBUG_COMMAND_LOGS && stderr) console.error(`[CMD ERR]:\n${truncateLogOutput(stderr)}`);
 
             if (error) {
                 if (error.killed) {
@@ -18,6 +36,9 @@ function runCommand(cmd) {
                 }
 
                 console.error(`[EXEC ERROR] Command failed: ${cmd}`);
+                if (stderr || stdout) {
+                    console.error(`[EXEC OUTPUT]:\n${truncateLogOutput(stderr || stdout)}`);
+                }
                 error.stderr = stderr || stdout || error.message;
                 return reject(error);
             }
@@ -26,18 +47,23 @@ function runCommand(cmd) {
     });
 }
 
+/**
+ * Read model dimensions from `prusa-slicer --info` output.
+ * @param {string} filePath Path to mesh file.
+ * @returns {Promise<{x: number, y: number, z: number, height_mm: number}>} Parsed size metrics.
+ */
 async function getModelInfo(filePath) {
     try {
         const { stdout } = await runCommand(`prusa-slicer --info "${filePath}"`);
         let x = 0, y = 0, z = 0;
 
-        const matchX = stdout.match(/size_x\s*=\s*([0-9.]+)/i);
-        const matchY = stdout.match(/size_y\s*=\s*([0-9.]+)/i);
-        const matchZ = stdout.match(/size_z\s*=\s*([0-9.]+)/i);
+        const matchX = /size_x\s*=\s*([0-9.]+)/i.exec(stdout);
+        const matchY = /size_y\s*=\s*([0-9.]+)/i.exec(stdout);
+        const matchZ = /size_z\s*=\s*([0-9.]+)/i.exec(stdout);
 
-        if (matchX) x = parseFloat(matchX[1]);
-        if (matchY) y = parseFloat(matchY[1]);
-        if (matchZ) z = parseFloat(matchZ[1]);
+        if (matchX) x = Number.parseFloat(matchX[1]);
+        if (matchY) y = Number.parseFloat(matchY[1]);
+        if (matchZ) z = Number.parseFloat(matchZ[1]);
 
         return { x, y, z, height_mm: z };
     } catch (err) {
@@ -46,20 +72,33 @@ async function getModelInfo(filePath) {
     }
 }
 
+/**
+ * Parse human-readable duration (e.g. `1h 30m`) to seconds.
+ * @param {string} timeStr Time expression from slicer metadata.
+ * @returns {number} Duration in seconds.
+ */
 function parseTimeString(timeStr) {
     let seconds = 0;
-    if (/^\d+$/.test(timeStr)) return parseInt(timeStr);
-    const days = timeStr.match(/(\d+)d/);
-    const hours = timeStr.match(/(\d+)h/);
-    const mins = timeStr.match(/(\d+)m/);
-    const secs = timeStr.match(/(\d+)s/);
-    if (days) seconds += parseInt(days[1]) * 86400;
-    if (hours) seconds += parseInt(hours[1]) * 3600;
-    if (mins) seconds += parseInt(mins[1]) * 60;
-    if (secs) seconds += parseInt(secs[1]);
+    if (/^\d+$/.test(timeStr)) return Number.parseInt(timeStr, 10);
+    const days = /(\d+)d/.exec(timeStr);
+    const hours = /(\d+)h/.exec(timeStr);
+    const mins = /(\d+)m/.exec(timeStr);
+    const secs = /(\d+)s/.exec(timeStr);
+    if (days) seconds += Number.parseInt(days[1], 10) * 86400;
+    if (hours) seconds += Number.parseInt(hours[1], 10) * 3600;
+    if (mins) seconds += Number.parseInt(mins[1], 10) * 60;
+    if (secs) seconds += Number.parseInt(secs[1], 10);
     return seconds;
 }
 
+/**
+ * Build normalized print statistics from generated slicer output.
+ * @param {string} filePath Output path to `.gcode` or `.sl1` artifact.
+ * @param {'FDM' | 'SLA'} technology Active print technology.
+ * @param {number|string} layerHeight Requested layer height.
+ * @param {number} knownHeight Known model height in millimeters.
+ * @returns {Promise<{print_time_seconds: number, print_time_readable: string, material_used_m: number, object_height_mm: number, estimated_price_huf: number}>}
+ */
 async function parseOutputDetailed(filePath, technology, layerHeight, knownHeight) {
     const stats = {
         print_time_seconds: 0,
@@ -72,26 +111,26 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
     if (technology === 'FDM' && fs.existsSync(filePath)) {
         try {
             const content = fs.readFileSync(filePath, 'utf8');
-            const m73Match = content.match(/M73 P0 R(\d+)/);
-            if (m73Match) stats.print_time_seconds = parseInt(m73Match[1]) * 60;
+            const m73Match = /M73 P0 R(\d+)/.exec(content);
+            if (m73Match) stats.print_time_seconds = Number.parseInt(m73Match[1], 10) * 60;
 
             if (stats.print_time_seconds === 0) {
-                const timeMatch = content.match(/; estimated printing time = (.*)/i);
+                const timeMatch = /; estimated printing time = (.*)/i.exec(content);
                 if (timeMatch) {
                     stats.print_time_readable = timeMatch[1].trim();
                     stats.print_time_seconds = parseTimeString(stats.print_time_readable);
                 }
             }
 
-            const filMatch = content.match(/; filament used \[mm\] = ([0-9.]+)/i);
-            if (filMatch) stats.material_used_m = parseFloat(filMatch[1]) / 1000;
+            const filMatch = /; filament used \[mm\] = ([0-9.]+)/i.exec(content);
+            if (filMatch) stats.material_used_m = Number.parseFloat(filMatch[1]) / 1000;
         } catch (e) {
             console.error('[PARSER ERROR]', e.message);
         }
     }
 
     if (technology === 'SLA' && stats.print_time_seconds === 0 && stats.object_height_mm > 0) {
-        const totalLayers = Math.ceil(stats.object_height_mm / Math.max(parseFloat(layerHeight), 0.025));
+        const totalLayers = Math.ceil(stats.object_height_mm / Math.max(Number.parseFloat(layerHeight), 0.025));
         const secondsPerLayer = 11;
         const baseTime = 120;
         stats.print_time_seconds = baseTime + (totalLayers * secondsPerLayer);
@@ -106,6 +145,11 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
     return stats;
 }
 
+/**
+ * Delete temporary files/directories created during request processing.
+ * @param {string[]} fileList Absolute/relative paths to clean.
+ * @returns {void}
+ */
 function cleanupFiles(fileList) {
     fileList.forEach((file) => {
         if (file && fs.existsSync(file)) {
@@ -124,6 +168,40 @@ function cleanupFiles(fileList) {
     });
 }
 
+/**
+ * Detect converter-origin geometry failures from error payload.
+ * @param {{message?: string, stderr?: string}} err Error object from command execution.
+ * @returns {boolean} True when error indicates invalid source geometry.
+ */
+function isSourceGeometryError(err) {
+    const combined = `${err?.message || ''}\n${err?.stderr || ''}`.toLowerCase();
+
+    const failedConverter = (
+        combined.includes('vector2stl.py') ||
+        combined.includes('cad2stl.py') ||
+        combined.includes('mesh2stl.py')
+    );
+
+    const geometryHints = [
+        'critical error',
+        'no 2d geometry found',
+        'no closed 2d geometry',
+        'invalid polygon geometry',
+        'could not create any geometry',
+        'scene is empty',
+        'mesh generation failed',
+        'conversion failed'
+    ];
+
+    return failedConverter && geometryHints.some((hint) => combined.includes(hint));
+}
+
+/**
+ * Main slicing request handler for multipart model uploads.
+ * @param {import('express').Request} req Express request with uploaded file and options.
+ * @param {import('express').Response} res Express response object.
+ * @returns {Promise<import('express').Response | void>} JSON response containing result or error.
+ */
 async function handleSlice(req, res) {
     const file = req.files ? req.files.find((f) => f.fieldname === 'choosenFile') : null;
     if (!file) return res.status(400).json({ error: 'No file uploaded (use key "choosenFile")' });
@@ -138,12 +216,12 @@ async function handleSlice(req, res) {
 
     const filesCleanupList = [inputFile];
 
-    const layerHeight = parseFloat(req.body.layerHeight || '0.2');
+    const layerHeight = Number.parseFloat(req.body.layerHeight || '0.2');
     const material = req.body.material || 'PLA';
-    const depth = parseFloat(req.body.depth || '2.0');
+    const depth = Number.parseFloat(req.body.depth || '2.0');
 
-    let infillRaw = parseInt(req.body.infill);
-    if (isNaN(infillRaw)) infillRaw = 20;
+    let infillRaw = Number.parseInt(req.body.infill, 10);
+    if (Number.isNaN(infillRaw)) infillRaw = 20;
     infillRaw = Math.max(0, Math.min(100, infillRaw));
     const infillPercentage = `${infillRaw}%`;
 
@@ -167,9 +245,9 @@ async function handleSlice(req, res) {
             await runCommand(`unzip -o "${inputFile}" -d "${unzipDir}"`);
 
             const files = fs.readdirSync(unzipDir);
-            const supportedExts = [...EXTENSIONS.direct, ...EXTENSIONS.cad, ...EXTENSIONS.image, ...EXTENSIONS.vector];
+            const supportedExts = new Set([...EXTENSIONS.direct, ...EXTENSIONS.cad, ...EXTENSIONS.image, ...EXTENSIONS.vector]);
 
-            const foundFile = files.find((f) => supportedExts.includes(path.extname(f).toLowerCase()));
+            const foundFile = files.find((f) => supportedExts.has(path.extname(f).toLowerCase()));
 
             if (!foundFile) throw new Error('ZIP does not contain a supported 3D/Image/Vector file.');
 
@@ -215,8 +293,8 @@ async function handleSlice(req, res) {
                 filesCleanupList.push(orientedStlPath);
                 processableFile = orientedStlPath;
             }
-        } catch (orientErr) {
-            console.warn(`[WARN] Orientation optimization failed, proceeding with original. Error: ${orientErr.message}`);
+        } catch (error_) {
+            console.warn(`[WARN] Orientation optimization failed, proceeding with original. Error: ${error_.message}`);
         }
 
         const modelInfo = await getModelInfo(processableFile);
@@ -279,6 +357,14 @@ async function handleSlice(req, res) {
                 success: false,
                 error: cleanMessage,
                 errorCode: 'MODEL_EXCEEDS_BUILD_VOLUME'
+            });
+        }
+
+        if (isSourceGeometryError(err)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Uploaded model/vector contains invalid or non-printable geometry. Automatic repair is disabled to preserve exact model fidelity. Please upload a corrected source file.',
+                errorCode: 'INVALID_SOURCE_GEOMETRY'
             });
         }
 

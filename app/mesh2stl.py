@@ -1,9 +1,24 @@
+"""Mesh-to-STL conversion utility.
+
+Loads supported polygonal mesh formats and exports normalized STL output.
+"""
+
 import sys
 import trimesh
-import numpy as np
 
-# Mesh->STL converter method
 def convert_mesh_to_stl(input_path, output_path):
+    """Convert a mesh or mesh scene to STL.
+
+    Args:
+        input_path: Path to input mesh (.obj, .3mf, etc.).
+        output_path: Destination STL output path.
+
+    Returns:
+        None. Writes STL output to disk.
+
+    Raises:
+        SystemExit: If mesh loading or export fails.
+    """
     print(f"[PYTHON] Loading mesh: {input_path}")
     try:
         # 1. Loading the mesh

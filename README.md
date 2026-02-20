@@ -255,4 +255,4 @@ You can customize pricing, security, and slicing behavior without changing endpo
 
 ## 📦 Release Log
 
-Detailed version history and retroactive tag notes are maintained in `CHANGELOG.md`.
+Detailed version history and retroactive tag notes are maintained in [`CHANGELOG.md`](https://github.com/hajdu-patrik/3D-Printer-Slicer-API/blob/v2.1.0/CHANGELOG.md).

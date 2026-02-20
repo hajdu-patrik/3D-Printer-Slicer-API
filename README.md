@@ -1,11 +1,11 @@
 <img width="2048" height="2048" alt="API-LOGO" src="https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a" />
 
-![Node.js](https://img.shields.io/badge/Node.js-24.13%2B-339933?style=flat&logo=node.js&logoColor=white)
-![Express](https://img.shields.io/badge/Backend-Express_4.18.2-000000?style=flat&logo=express&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=flat&logo=python&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18.19.1-339933?style=flat&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Express_4.22.1-000000?style=flat&logo=express&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12.3-3776AB?style=flat&logo=python&logoColor=white)
 ![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.1-orange?style=flat)
 ![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
-![Swagger](https://img.shields.io/badge/API_Docs-swagger--ui--express_5.0.0-85EA2D?style=flat&logo=swagger&logoColor=black)
+![Swagger](https://img.shields.io/badge/API_Docs-swagger--ui--express_5.0.1-85EA2D?style=flat&logo=swagger&logoColor=black)
 ![Deployment](https://img.shields.io/badge/Deployment-VPS_24%2F7-4CAF50?style=flat&logo=linux&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Live_Production-success?style=flat)
 
@@ -60,8 +60,8 @@ The API accepts single files or `.zip` archives containing any of the following 
 |----------------|--------------------------------------|-------------------|
 | **Direct 3D**  | `.stl`, `.obj`, `.3mf`               | Scene merging & manifold validation. |
 | **NURBS / CAD**| `.stp`, `.step`, `.igs`, `.iges`     | Converted via Gmsh and meshed as-is (invalid geometry is rejected). |
-| **Comming soon!**     | `.dxf`, `.svg`, `.eps`, `.pdf`       | Polygon extraction and parameterized Z-extrusion. |
-| **Comming soon!**      | `.jpg`, `.jpeg`, `.png`, `.bmp`      | Grayscale heightmap generation (Lithophane style). |
+| **Vector**     | `.dxf`, `.svg`, `.eps`, `.pdf`       | Polygon extraction and parameterized Z-extrusion (open/invalid geometry is rejected, no auto-fix). |
+| **Image**      | `.jpg`, `.jpeg`, `.png`, `.bmp`      | Grayscale heightmap generation (Lithophane style); invalid/non-image source files are rejected (no auto-fix). |
 
 ---
 
@@ -191,13 +191,13 @@ curl -X PATCH http://localhost:3000/pricing/FDM/PETG \
 
 ## 💻 Integration Example
 
-**Endpoint:** `POST /slice`
-Generate a slicing profile and price estimate by uploading a file.
+**Endpoint (FDM):** `POST /slice/fdm`
+Generate an FDM slicing profile and price estimate by uploading a file.
 
 **cURL Request:**
 
 ```bash
-curl -X POST http://localhost:3000/slice \
+curl -X POST http://localhost:3000/slice/fdm \
   -H "Accept: application/json" \
   -F "choosenFile=@/path/to/your/model.step" \
   -F "layerHeight=0.2" \
@@ -225,6 +225,16 @@ curl -X POST http://localhost:3000/slice \
 }
 ```
 
+**Endpoint (SLA):** `POST /slice/sla`
+
+```bash
+curl -X POST http://localhost:3000/slice/sla \
+  -H "Accept: application/json" \
+  -F "choosenFile=@/path/to/your/model.stl" \
+  -F "layerHeight=0.05" \
+  -F "material=Standard"
+```
+
 ---
 
 ## ⚙️ Configuration & Limits
@@ -239,44 +249,10 @@ You can customize pricing, security, and slicing behavior without changing endpo
   - *Default SLA:* 120 x 120 x 150 mm
 - **Slicer Profiles:** Stored in `configs/*.ini` (e.g. `FDM_0.2mm.ini`, `SLA_0.05mm.ini`).
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations.
-- **Model Fidelity Policy:** Uploaded geometry is never auto-healed or shape-corrected; invalid/non-printable geometry is rejected with a clear error.
-
----
-
-## 🛡️ Public Repo Security Checklist
-
-This project is safe to keep public **if** the following rules are always respected:
-
-1. Never commit `.env` or any API/SSH/private key files.
-2. Keep GitHub Actions secrets only in GitHub Secrets (`SERVER_IP`, `SERVER_USER`, `SERVER_PORT`, `SSH_PRIVATE_KEY`, etc.).
-3. Keep monitoring and deployment config public, but keep credentials private.
-4. Bind internal services to localhost (`127.0.0.1`) behind Nginx/Cloudflare.
-5. Rotate secrets immediately if they were ever exposed in chat, screenshots, logs, or commits.
-6. Use Cloudflare WAF + rate limits for `/slice` in production.
-
-Recommended pre-push check:
-
-```bash
-git status
-git grep -n "ADMIN_API_KEY\|PRIVATE KEY\|BEGIN RSA\|BEGIN OPENSSH" .
-```
+- **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
 
 ---
 
 ## 📦 Release Log
 
-### `v1.0.0` - `v1.1.2`
-- Core slicing API for FDM/SLA.
-- Base conversion pipeline (CAD, mesh, image, vector).
-- Swagger docs, health checks, and pricing persistence.
-
-### `v2.0.0` Release
-- Strict model-fidelity processing (no auto-heal / no silent geometry repair).
-- Improved error handling (`INVALID_SOURCE_GEOMETRY`) for unsupported source geometry.
-- Dynamic Swagger docs for pricing materials (newly added materials appear in PATCH/DELETE selectors).
-- Pricing API expansion with material creation endpoints (`POST /pricing/FDM`, `POST /pricing/SLA`).
-- Production/dev container split (`docker-compose.yml` + `docker-compose.dev.yml`).
-- Docker hardening improvements (healthcheck, no-new-privileges, cap drop, non-root container user).
-- Monitoring profile integration (Uptime Kuma) and one-command monitoring setup script.
-- CI/CD workflow upgrade (validation job + safer VPS deployment flow).
-- Documentation hardening: VPS topology, Cloudflare guidance, and operational security checklist.
+Detailed version history and retroactive tag notes are maintained in `CHANGELOG.md`.

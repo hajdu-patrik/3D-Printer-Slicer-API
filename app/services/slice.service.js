@@ -145,6 +145,17 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
     return stats;
 }
 
+function normalizeLayerHeight(layerHeightRaw) {
+    const parsed = Number.parseFloat(layerHeightRaw || '0.2');
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+}
+
+function validateLayerHeightForTechnology(technology, layerHeight) {
+    const allowed = technology === 'SLA' ? [0.025, 0.05] : [0.1, 0.2, 0.3];
+    return allowed.some((value) => Math.abs(value - layerHeight) < 1e-9);
+}
+
 /**
  * Delete temporary files/directories created during request processing.
  * @param {string[]} fileList Absolute/relative paths to clean.
@@ -179,7 +190,8 @@ function isSourceGeometryError(err) {
     const failedConverter = (
         combined.includes('vector2stl.py') ||
         combined.includes('cad2stl.py') ||
-        combined.includes('mesh2stl.py')
+        combined.includes('mesh2stl.py') ||
+        combined.includes('img2stl.py')
     );
 
     const geometryHints = [
@@ -190,7 +202,10 @@ function isSourceGeometryError(err) {
         'could not create any geometry',
         'scene is empty',
         'mesh generation failed',
-        'conversion failed'
+        'conversion failed',
+        'cannot identify image file',
+        'failed to load path geometry',
+        'no 2d geometry found'
     ];
 
     return failedConverter && geometryHints.some((hint) => combined.includes(hint));
@@ -202,7 +217,7 @@ function isSourceGeometryError(err) {
  * @param {import('express').Response} res Express response object.
  * @returns {Promise<import('express').Response | void>} JSON response containing result or error.
  */
-async function handleSlice(req, res) {
+async function processSlice(req, res, forcedTechnology = null) {
     const file = req.files ? req.files.find((f) => f.fieldname === 'choosenFile') : null;
     if (!file) return res.status(400).json({ error: 'No file uploaded (use key "choosenFile")' });
 
@@ -216,7 +231,15 @@ async function handleSlice(req, res) {
 
     const filesCleanupList = [inputFile];
 
-    const layerHeight = Number.parseFloat(req.body.layerHeight || '0.2');
+    const layerHeight = normalizeLayerHeight(req.body.layerHeight || '0.2');
+    if (!layerHeight) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid layerHeight value.',
+            errorCode: 'INVALID_LAYER_HEIGHT'
+        });
+    }
+
     const material = req.body.material || 'PLA';
     const depth = Number.parseFloat(req.body.depth || '2.0');
 
@@ -225,7 +248,16 @@ async function handleSlice(req, res) {
     infillRaw = Math.max(0, Math.min(100, infillRaw));
     const infillPercentage = `${infillRaw}%`;
 
-    const technology = layerHeight <= 0.05 ? 'SLA' : 'FDM';
+    const technology = forcedTechnology || (layerHeight <= 0.05 ? 'SLA' : 'FDM');
+
+    if (forcedTechnology && !validateLayerHeightForTechnology(forcedTechnology, layerHeight)) {
+        const allowedMessage = forcedTechnology === 'SLA' ? '0.025, 0.05' : '0.1, 0.2, 0.3';
+        return res.status(400).json({
+            success: false,
+            error: `Invalid layerHeight for ${forcedTechnology}. Allowed values: ${allowedMessage}`,
+            errorCode: 'INVALID_LAYER_HEIGHT_FOR_TECHNOLOGY'
+        });
+    }
 
     console.log(`[INFO] Request: ${originalName} | Tech: ${technology} | Mat: ${material}`);
 
@@ -363,7 +395,7 @@ async function handleSlice(req, res) {
         if (isSourceGeometryError(err)) {
             return res.status(400).json({
                 success: false,
-                error: 'Uploaded model/vector contains invalid or non-printable geometry. Automatic repair is disabled to preserve exact model fidelity. Please upload a corrected source file.',
+                error: 'Uploaded model/image/vector contains invalid or non-printable source data. Automatic repair is disabled to preserve exact model fidelity. Please upload a corrected source file.',
                 errorCode: 'INVALID_SOURCE_GEOMETRY'
             });
         }
@@ -383,6 +415,15 @@ async function handleSlice(req, res) {
     }
 }
 
+async function handleSliceFDM(req, res) {
+    return processSlice(req, res, 'FDM');
+}
+
+async function handleSliceSLA(req, res) {
+    return processSlice(req, res, 'SLA');
+}
+
 module.exports = {
-    handleSlice
+    handleSliceFDM,
+    handleSliceSLA
 };

@@ -3,47 +3,22 @@
  * Contains pricing and slicing endpoint schemas.
  */
 
-const DEFAULT_FDM_MATERIALS = ['PLA', 'ABS', 'PETG', 'TPU'];
-const DEFAULT_SLA_MATERIALS = ['Standard', 'ABS-Like', 'Flexible'];
-
-/**
- * Resolve dynamic material enums from current pricing state.
- * @param {{FDM?: Record<string, number>, SLA?: Record<string, number>}} pricing Current pricing map.
- * @returns {{fdmMaterials: string[], slaMaterials: string[], allMaterials: string[]}}
- */
-function getMaterialEnums(pricing) {
-    const fdmMaterials = Object.keys(pricing?.FDM || {});
-    const slaMaterials = Object.keys(pricing?.SLA || {});
-
-    const normalizedFdm = fdmMaterials.length > 0 ? fdmMaterials : DEFAULT_FDM_MATERIALS;
-    const normalizedSla = slaMaterials.length > 0 ? slaMaterials : DEFAULT_SLA_MATERIALS;
-    const allMaterials = [...new Set([...normalizedFdm, ...normalizedSla])];
-
-    return {
-        fdmMaterials: normalizedFdm,
-        slaMaterials: normalizedSla,
-        allMaterials
-    };
-}
-
 /**
  * Build OpenAPI document dynamically from current pricing state.
  * @param {{FDM?: Record<string, number>, SLA?: Record<string, number>}} pricing Current pricing map.
  * @returns {object} OpenAPI document object.
  */
 function createSwaggerDocument(pricing) {
-    const { fdmMaterials, slaMaterials, allMaterials } = getMaterialEnums(pricing);
-
     return {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '1.2.0',
+            version: '2.1.0',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
             { name: 'Pricing', description: 'Runtime pricing configuration endpoints' },
-            { name: 'Slicing', description: 'Slicing and print estimation endpoint' }
+            { name: 'Slicing', description: 'Explicit FDM/SLA slicing and print estimation endpoints' }
         ],
         paths: {
         '/pricing': {
@@ -69,7 +44,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/FDM': {
+        '/pricing/fdm': {
             post: {
                 tags: ['Pricing'],
                 summary: 'Create a new FDM material.',
@@ -106,7 +81,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/SLA': {
+        '/pricing/sla': {
             post: {
                 tags: ['Pricing'],
                 summary: 'Create a new SLA material.',
@@ -143,7 +118,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/FDM/{material}': {
+        '/pricing/fdm/{material}': {
             patch: {
                 tags: ['Pricing'],
                 summary: 'Update or create FDM material price.',
@@ -153,7 +128,7 @@ function createSwaggerDocument(pricing) {
                         name: 'material',
                         in: 'path',
                         required: true,
-                        schema: { type: 'string', enum: fdmMaterials }
+                        schema: { type: 'string' }
                     },
                     {
                         name: 'x-api-key',
@@ -192,7 +167,7 @@ function createSwaggerDocument(pricing) {
                         name: 'material',
                         in: 'path',
                         required: true,
-                        schema: { type: 'string', enum: fdmMaterials }
+                        schema: { type: 'string' }
                     },
                     {
                         name: 'x-api-key',
@@ -210,7 +185,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/SLA/{material}': {
+        '/pricing/sla/{material}': {
             patch: {
                 tags: ['Pricing'],
                 summary: 'Update or create SLA material price.',
@@ -220,7 +195,7 @@ function createSwaggerDocument(pricing) {
                         name: 'material',
                         in: 'path',
                         required: true,
-                        schema: { type: 'string', enum: slaMaterials }
+                        schema: { type: 'string' }
                     },
                     {
                         name: 'x-api-key',
@@ -259,7 +234,7 @@ function createSwaggerDocument(pricing) {
                         name: 'material',
                         in: 'path',
                         required: true,
-                        schema: { type: 'string', enum: slaMaterials }
+                        schema: { type: 'string' }
                     },
                     {
                         name: 'x-api-key',
@@ -277,11 +252,11 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/slice': {
+        '/slice/fdm': {
             post: {
                 tags: ['Slicing'],
-                summary: 'Upload 2D/3D files and get slicing results with price estimation.',
-                description: 'Supported files:\n\n- **3D models:** `.stl`, `.obj`, `.3mf`, `.stp`, `.step`, `.igs`, `.iges`, `.zip`\n- **Images:** `.jpg`, `.jpeg`, `.png`, `.bmp`\n- **Vectors:** `.dxf`, `.svg`, `.eps`, `.pdf`\n- **ZIP archives:** must contain at least one supported file type; first valid file is processed.',
+                summary: 'FDM-only slicing endpoint.',
+                description: 'Processes upload strictly as FDM. No technology auto-detection.',
                 consumes: ['multipart/form-data'],
                 requestBody: {
                     required: true,
@@ -297,22 +272,21 @@ function createSwaggerDocument(pricing) {
                                     },
                                     layerHeight: {
                                         type: 'string',
-                                        enum: ['0.025', '0.05', '0.1', '0.2', '0.3'],
+                                        enum: ['0.1', '0.2', '0.3'],
                                         default: '0.2',
-                                        description: 'Layer height `<= 0.05` triggers SLA, layer height `> 0.05` triggers FDM.'
+                                        description: 'Allowed FDM layer heights only.'
                                     },
                                     material: {
                                         type: 'string',
-                                        enum: allMaterials,
                                         default: 'PLA',
-                                        description: 'FDM materials: `PLA`, `ABS`, `PETG`, `TPU`. SLA materials: `Standard`, `ABS-Like`, `Flexible`.'
+                                        description: 'FDM material key.'
                                     },
                                     infill: {
                                         type: 'integer',
                                         default: 20,
                                         minimum: 0,
                                         maximum: 100,
-                                        description: 'Infill percentage from `0` to `100`. Only affects FDM print time and material usage.'
+                                        description: 'Infill percentage from `0` to `100`.'
                                     }
                                 },
                                 required: ['choosenFile', 'layerHeight', 'material']
@@ -321,29 +295,49 @@ function createSwaggerDocument(pricing) {
                     }
                 },
                 responses: {
-                    200: {
-                        description: 'Slicing successful',
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        success: { type: 'boolean' },
-                                        technology: { type: 'string', example: 'FDM' },
-                                        hourly_rate: { type: 'number', example: 800 },
-                                        stats: {
-                                            type: 'object',
-                                            properties: {
-                                                print_time_readable: { type: 'string', example: '1h 30m' },
-                                                estimated_price_huf: { type: 'number', example: 1250 }
-                                            }
-                                        },
-                                        download_url: { type: 'string' }
+                    200: { description: 'Slicing successful' },
+                    400: { description: 'Bad Request' },
+                    500: { description: 'Server Error' }
+                }
+            }
+        },
+        '/slice/sla': {
+            post: {
+                tags: ['Slicing'],
+                summary: 'SLA-only slicing endpoint.',
+                description: 'Processes upload strictly as SLA. No technology auto-detection.',
+                consumes: ['multipart/form-data'],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'multipart/form-data': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    choosenFile: {
+                                        type: 'string',
+                                        format: 'binary',
+                                        description: 'The file to slice and to estimate price!'
+                                    },
+                                    layerHeight: {
+                                        type: 'string',
+                                        enum: ['0.025', '0.05'],
+                                        default: '0.05',
+                                        description: 'Allowed SLA layer heights only.'
+                                    },
+                                    material: {
+                                        type: 'string',
+                                        default: 'Standard',
+                                        description: 'SLA material key.'
                                     }
-                                }
+                                },
+                                required: ['choosenFile', 'layerHeight', 'material']
                             }
                         }
-                    },
+                    }
+                },
+                responses: {
+                    200: { description: 'Slicing successful' },
                     400: { description: 'Bad Request' },
                     500: { description: 'Server Error' }
                 }

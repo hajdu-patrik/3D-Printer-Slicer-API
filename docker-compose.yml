@@ -1,8 +1,8 @@
 services:
   slicer-api:
     build: .
-    image: slicer-api:v2.0.0
-    container_name: slicer-api-backend-server
+    image: 3d-printer-slicer-api:v2.1.0
+    container_name: 3d-printer-slicer-api-backend-server
     env_file:
       - .env
     ports:
@@ -38,7 +38,7 @@ services:
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    container_name: slicer-api-uptime-kuma
+    container_name: 3d-printer-slicer-api-uptime-kuma
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:3001:3001"

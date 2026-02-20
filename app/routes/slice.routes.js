@@ -5,7 +5,7 @@
 const express = require('express');
 const multer = require('multer');
 const { HELP_FILES_DIR } = require('../config/paths');
-const { handleSlice } = require('../services/slice.service');
+const { handleSliceFDM, handleSliceSLA } = require('../services/slice.service');
 
 const router = express.Router();
 
@@ -20,8 +20,13 @@ const upload = multer({
 });
 
 /**
- * Slice endpoint that processes uploaded files through conversion and slicing.
+ * FDM-only slice endpoint.
  */
-router.post('/slice', upload.any(), handleSlice);
+router.post('/slice/fdm', upload.any(), handleSliceFDM);
+
+/**
+ * SLA-only slice endpoint.
+ */
+router.post('/slice/sla', upload.any(), handleSliceSLA);
 
 module.exports = router;

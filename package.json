@@ -1,6 +1,6 @@
 {
-  "name": "slicer-api",
-  "version": "2.0.0",
+  "name": "3d-printer-slicer-api",
+  "version": "2.1.0",
   "main": "server.js",
   "dependencies": {
     "express": "^4.18.2",

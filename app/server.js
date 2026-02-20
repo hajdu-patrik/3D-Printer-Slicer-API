@@ -35,6 +35,7 @@ app.use('/download', express.static(path.join(OUTPUT_DIR)));
 // Swagger UI setup
 const swaggerUiOptions = {
     swaggerOptions: {
+        url: '/openapi.json',
         docExpansion: 'none',
         operationsSorter: 'method',
         defaultModelsExpandDepth: -1
@@ -42,12 +43,23 @@ const swaggerUiOptions = {
     customCss: '.parameters-col_description .parameter__in { display: none !important; }'
 };
 
+function setNoCacheHeaders(res) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+}
+
+app.get('/openapi.json', (req, res) => {
+    setNoCacheHeaders(res);
+    return res.status(200).json(createSwaggerDocument(getPricing()));
+});
+
 app.use(
     '/docs',
     swaggerUi.serve,
     (req, res, next) => {
-        const dynamicSwaggerDocument = createSwaggerDocument(getPricing());
-        return swaggerUi.setup(dynamicSwaggerDocument, swaggerUiOptions)(req, res, next);
+        setNoCacheHeaders(res);
+        return swaggerUi.setup(undefined, swaggerUiOptions)(req, res, next);
     }
 );
 app.get('/', (req, res) => res.redirect('/docs'));

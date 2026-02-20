@@ -2,8 +2,9 @@
  * Pricing service for loading, persisting, and querying material hourly rates.
  */
 
-const fs = require('fs');
-const { PRICING_FILE } = require('../config/paths');
+const fs = require('node:fs');
+const path = require('node:path');
+const { PRICING_FILE, RUNTIME_PRICING_FILE } = require('../config/paths');
 
 /**
  * Default fallback pricing matrix in HUF/hour.
@@ -14,20 +15,57 @@ const DEFAULT_PRICING = {
     SLA: { Standard: 1800, 'ABS-Like': 1800, Flexible: 2400 }
 };
 
-let pricing = JSON.parse(JSON.stringify(DEFAULT_PRICING));
+let pricing = structuredClone(DEFAULT_PRICING);
+let activePricingFile = PRICING_FILE;
+
+function readPricingFile(filePath) {
+    const pricingRaw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(pricingRaw);
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid pricing payload');
+
+    const fdmSource = parsed.FDM && typeof parsed.FDM === 'object' ? parsed.FDM : undefined;
+    const slaSource = parsed.SLA && typeof parsed.SLA === 'object' ? parsed.SLA : undefined;
+
+    return {
+        FDM: { ...DEFAULT_PRICING.FDM, ...fdmSource },
+        SLA: { ...DEFAULT_PRICING.SLA, ...slaSource }
+    };
+}
+
+function writePricingFile(filePath) {
+    const parentDir = path.dirname(filePath);
+    if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(pricing, null, 2));
+}
+
+function getExistingCandidates() {
+    const candidates = [PRICING_FILE, RUNTIME_PRICING_FILE].filter((filePath) => fs.existsSync(filePath));
+    return candidates.sort((a, b) => {
+        const aTime = fs.statSync(a).mtimeMs;
+        const bTime = fs.statSync(b).mtimeMs;
+        return bTime - aTime;
+    });
+}
 
 /**
  * Persist current in-memory pricing to disk.
  * @returns {boolean} True when save succeeds, otherwise false.
  */
 function savePricingToDisk() {
-    try {
-        fs.writeFileSync(PRICING_FILE, JSON.stringify(pricing, null, 2));
-        return true;
-    } catch (err) {
-        console.error(`[PRICING UPDATE] Failed to save pricing file: ${err.message}`);
-        return false;
+    const writeTargets = [activePricingFile, PRICING_FILE, RUNTIME_PRICING_FILE]
+        .filter((value, index, arr) => arr.indexOf(value) === index);
+
+    for (const targetFile of writeTargets) {
+        try {
+            writePricingFile(targetFile);
+            activePricingFile = targetFile;
+            return true;
+        } catch (err) {
+            console.error(`[PRICING UPDATE] Failed to save pricing file (${targetFile}): ${err.message}`);
+        }
     }
+
+    return false;
 }
 
 /**
@@ -36,31 +74,31 @@ function savePricingToDisk() {
  * @returns {void}
  */
 function loadPricingFromDisk() {
-    if (!fs.existsSync(PRICING_FILE)) {
-        pricing = JSON.parse(JSON.stringify(DEFAULT_PRICING));
-        try {
-            fs.writeFileSync(PRICING_FILE, JSON.stringify(pricing, null, 2));
-            console.log('[PRICING UPDATE] pricing.json was missing. Default pricing created.');
-        } catch (err) {
-            console.error(`[PRICING UPDATE] Could not create default pricing.json: ${err.message}`);
+    const existingCandidates = getExistingCandidates();
+
+    if (existingCandidates.length === 0) {
+        pricing = structuredClone(DEFAULT_PRICING);
+        if (savePricingToDisk()) {
+            console.log(`[PRICING UPDATE] Pricing file was missing. Default pricing created at ${activePricingFile}.`);
+        } else {
+            console.error('[PRICING UPDATE] Could not persist default pricing to any storage target.');
         }
         return;
     }
 
-    try {
-        const pricingRaw = fs.readFileSync(PRICING_FILE, 'utf8');
-        const parsed = JSON.parse(pricingRaw);
-        if (!parsed || typeof parsed !== 'object') throw new Error('Invalid pricing payload');
-
-        pricing = {
-            FDM: { ...DEFAULT_PRICING.FDM, ...(parsed.FDM || {}) },
-            SLA: { ...DEFAULT_PRICING.SLA, ...(parsed.SLA || {}) }
-        };
-    } catch (err) {
-        console.warn(`[PRICING UPDATE] Failed to read pricing.json, using defaults. Reason: ${err.message}`);
-        pricing = JSON.parse(JSON.stringify(DEFAULT_PRICING));
-        savePricingToDisk();
+    for (const candidateFile of existingCandidates) {
+        try {
+            pricing = readPricingFile(candidateFile);
+            activePricingFile = candidateFile;
+            return;
+        } catch (err) {
+            console.warn(`[PRICING UPDATE] Failed to read ${candidateFile}. Reason: ${err.message}`);
+        }
     }
+
+    console.warn('[PRICING UPDATE] All pricing files were unreadable, using defaults.');
+    pricing = structuredClone(DEFAULT_PRICING);
+    savePricingToDisk();
 }
 
 /**
@@ -125,7 +163,7 @@ function removeMaterial(technology, materialKey) {
  */
 function getRate(technology, material) {
     const techPricing = pricing[technology] || {};
-    if (Object.prototype.hasOwnProperty.call(techPricing, material)) {
+    if (Object.hasOwn(techPricing, material)) {
         return techPricing[material];
     }
 

@@ -11,6 +11,7 @@ const OUTPUT_DIR = path.join(APP_ROOT, 'output');
 const LOGS_DIR = path.join(APP_ROOT, 'logs');
 const CONFIGS_DIR = path.join(APP_ROOT, 'configs');
 const PRICING_FILE = path.join(CONFIGS_DIR, 'pricing.json');
+const RUNTIME_PRICING_FILE = path.join(LOGS_DIR, 'pricing.runtime.json');
 
 /**
  * Ensure all runtime directories exist before processing requests.
@@ -30,5 +31,6 @@ module.exports = {
     LOGS_DIR,
     CONFIGS_DIR,
     PRICING_FILE,
+    RUNTIME_PRICING_FILE,
     ensureRequiredDirectories
 };

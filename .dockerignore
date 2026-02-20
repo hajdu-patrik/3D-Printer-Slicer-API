@@ -1,26 +1,27 @@
-# 1. Version Control
+# VCS and metadata
 .git/
 .gitignore
+.github/
 
-# 2. Dependencies and Cache
+# Local dependencies and caches
 node_modules/
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# 3. Environment Variables
+# Local env files
 .env
 .env.*
 *.env
 
-# 4. IDE and Editor files
+# IDE and OS artifacts
 .vscode/
 .idea/
 *.swp
 .DS_Store
 
-# 5. Application-specific files
+# Runtime folders and generated outputs
 output/
-!output/.gitkeep
 input/archive/
 input/cad/
 input/direct/
@@ -28,10 +29,8 @@ input/image/
 input/vector/
 logs/
 
-# 6. Docker configuration files
-Dockerfile
-docker-compose.yml
-
-# 7. Documentation and License
+# Documentation and non-runtime assets
 README.md
 LICENSE.md
+tests/
+ops/

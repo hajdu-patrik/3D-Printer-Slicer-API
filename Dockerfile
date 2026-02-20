@@ -9,13 +9,13 @@ WORKDIR /app
 
 # 1. System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl unzip git \
+    wget curl \
     libglu1-mesa libgtk-3-0 libegl1 libgdiplus libwebkit2gtk-4.1-0 \
     libosmesa6-dev \
     libxft2 libxinerama1 \
     locales ca-certificates \
     nodejs npm \
-    python3 python3-pip python3-numpy python3-pil python3-scipy \
+    python3 python3-pip \
     libgeos-dev pstoedit ghostscript \
     && locale-gen en_US.UTF-8 \
     && apt-get clean \
@@ -30,21 +30,28 @@ RUN wget -q https://github.com/prusa3d/PrusaSlicer/releases/download/version_2.8
     && rm PrusaSlicer.AppImage
 
 # 3. Node.js setup
-COPY package.json ./
+COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm install && npm audit fix --force
+    npm ci --omit=dev --no-audit --no-fund
 
 # 4. Python dependencies & SECURITY FIX
+COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade setuptools --break-system-packages && \
-    pip3 install trimesh[easy] ezdxf shapely svg.path gmsh numpy-stl scipy --break-system-packages
+    pip3 install --no-cache-dir -r requirements.txt --break-system-packages
 
 # 5. Application Files
 COPY app/ ./
 COPY configs/ ./configs/
 
-# Create folders
-RUN mkdir -p input output logs
+# Create runtime user and writable folders (idempotent)
+RUN set -eux; \
+    if ! getent group slicer >/dev/null; then groupadd --system slicer; fi; \
+    if ! id -u slicer >/dev/null 2>&1; then useradd --system --gid slicer --create-home --home-dir /home/slicer --shell /usr/sbin/nologin slicer; fi; \
+    mkdir -p input output logs; \
+    chown -R slicer:slicer /app
+
+USER slicer
 
 EXPOSE 3000
 CMD ["node", "server.js"]

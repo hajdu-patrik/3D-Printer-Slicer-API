@@ -1,30 +1,79 @@
-name: Deploy to VPS
+name: CI and Deploy to VPS
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  validate:
+    name: Validate source files
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: SSH into VPS and deploy
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check app/server.js
+          node --check app/services/slice.service.js
+          node --check app/services/pricing.service.js
+          node --check app/docs/swagger-docs.js
+          node --check app/routes/pricing.routes.js
+          node --check app/routes/slice.routes.js
+          node --check app/routes/system.routes.js
+          node --check app/middleware/requireAdmin.js
+          node --check app/config/constants.js
+          node --check app/config/paths.js
+          node --check app/utils/logger.js
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile app/cad2stl.py app/img2stl.py app/mesh2stl.py app/orient.py app/vector2stl.py
+
+  deploy:
+    name: Deploy on VPS
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT }}
+          script_stop: true
           script: |
             cd ~/3D-Printer-Slicer-API-for-FDM-and-SLA_JS
             git pull origin main
             
-            # 1. Step: Build the new Docker image. This will use the updated code from the git pull. The build process will be cached, so only changed layers will be rebuilt, making it faster.
-            sudo docker-compose build
-            
-            # 2. Step: Restart the container with the new image. The -d flag runs the container in detached mode, so it will run in the background.
-            sudo docker-compose up -d
-            
-            # 3. Step: Resource management. Remove old, unused ("dangling") images to prevent filling up the VPS disk space.
+            # Rebuild and restart API (and optional monitoring profile if needed)
+            sudo docker compose up -d --build
+
+            # Optional: uncomment if monitoring profile is used on VPS
+            # sudo docker compose --profile monitoring up -d
+
+            # Wait briefly, then verify health endpoint
+            sleep 8
+            curl -fsS http://127.0.0.1:3000/health >/dev/null
+
+            # Cleanup dangling images
             sudo docker image prune -f

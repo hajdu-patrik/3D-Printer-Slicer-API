@@ -1,13 +1,30 @@
-version: '3.8'
 services:
   slicer-api:
     build: .
-    image: slicer-api:v1.0
+    image: slicer-api:v2.0.0
     container_name: slicer-api-backend-server
-    environment:
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
+    env_file:
+      - .env
     ports:
       - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     volumes:
       # --- Datas & Logs ---
       - ./input:/app/input
@@ -16,13 +33,25 @@ services:
       
       # --- Configurations ---
       - ./configs:/app/configs
-      
-      # --- Codes ---
-      - ./app/static:/app/static
-      - ./app/server.js:/app/server.js
-      - ./app/img2stl.py:/app/img2stl.py
-      - ./app/vector2stl.py:/app/vector2stl.py
-      - ./app/mesh2stl.py:/app/mesh2stl.py
-      - ./app/cad2stl.py:/app/cad2stl.py
-      - ./app/orient.py:/app/orient.py
     restart: unless-stopped
+    stop_grace_period: 30s
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: slicer-api-uptime-kuma
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes:
+  uptime-kuma-data:

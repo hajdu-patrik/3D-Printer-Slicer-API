@@ -1,0 +1,11 @@
+services:
+  slicer-api:
+    volumes:
+      # --- Live code mounts for local development ---
+      - ./app/static:/app/static
+      - ./app/server.js:/app/server.js
+      - ./app/img2stl.py:/app/img2stl.py
+      - ./app/vector2stl.py:/app/vector2stl.py
+      - ./app/mesh2stl.py:/app/mesh2stl.py
+      - ./app/cad2stl.py:/app/cad2stl.py
+      - ./app/orient.py:/app/orient.py

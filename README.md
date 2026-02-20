@@ -76,9 +76,9 @@ The API accepts single files or `.zip` archives containing any of the following 
 The API is containerized for instant deployment.
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/3D-Printer-Slicer-API-for-FDM-and-SLA_JS.git
+git clone https://github.com/hajdu-patrik/3D-Printer-Slicer-API.git
 
-cd 3D-Printer-Slicer-API-for-FDM-and-SLA_JS
+cd 3D-Printer-Slicer-API
 
 # Build and start the service in detached mode
 docker compose up -d --build
@@ -141,31 +141,31 @@ If `configs/pricing.json` does not exist, the API auto-creates it with default F
 
 ### Admin-Protected Endpoints
 
-- `POST /pricing/FDM`
+- `POST /pricing/fdm`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "ASA", "price": 1200 }`
   - Creates a new FDM material.
 
-- `POST /pricing/SLA`
+- `POST /pricing/sla`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "High-Temp", "price": 2600 }`
   - Creates a new SLA material.
 
-- `PATCH /pricing/FDM/:material`
+- `PATCH /pricing/fdm/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 950 }`
   - Updates FDM material price.
 
-- `PATCH /pricing/SLA/:material`
+- `PATCH /pricing/sla/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 1800 }`
   - Updates SLA material price.
 
-- `DELETE /pricing/FDM/:material`
+- `DELETE /pricing/fdm/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes FDM material pricing entry.
 
-- `DELETE /pricing/SLA/:material`
+- `DELETE /pricing/sla/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes SLA material pricing entry.
 

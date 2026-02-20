@@ -172,7 +172,7 @@ If `configs/pricing.json` does not exist, the API auto-creates it with default F
 ### Example (Create new FDM material)
 
 ```bash
-curl -X POST http://localhost:3000/pricing/FDM \
+curl -X POST http://localhost:3000/pricing/fdm \
   -H "Content-Type: application/json" \
   -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
   -d '{"material":"ASA","price":1200}'
@@ -181,7 +181,7 @@ curl -X POST http://localhost:3000/pricing/FDM \
 ### Example (Update PETG)
 
 ```bash
-curl -X PATCH http://localhost:3000/pricing/FDM/PETG \
+curl -X PATCH http://localhost:3000/pricing/fdm/PETG \
   -H "Content-Type: application/json" \
   -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
   -d '{"price":950}'

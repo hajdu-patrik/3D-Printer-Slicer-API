@@ -45,7 +45,7 @@ The solution follows a modular, containerized architecture ensuring high availab
 | **middleware/**   | Security Layer     | API-key authorization middleware for admin-only pricing mutations. |
 | **docs/**         | API Schema         | Centralized OpenAPI document (`swagger-docs.js`) served by Swagger UI. |
 | **config/**       | Runtime Config     | Shared constants and filesystem paths used across modules. |
-| **Python Converters** | Geometry Processors | Specialized scripts (`cad2stl.py`, `vector2stl.py`, etc.) powered by Gmsh and Shapely to normalize any input into valid STLs. |
+| **Python Converters** | Geometry Processors | Specialized scripts (`cad2stl.py`, `vector2stl.py`, etc.) powered by Gmsh and Shapely with strict model-fidelity mode (no automatic geometry repair). |
 | **PrusaSlicer CLI** | The Slicing Engine | Headless execution of PrusaSlicer for toolpath generation, support creation, and rasterization. |
 | **Docker (Ubuntu)** | The Sandbox        | An isolated, dependency-rich environment containing X11 libraries, C++ binaries, and Node/Python runtimes. |
 
@@ -59,7 +59,7 @@ The API accepts single files or `.zip` archives containing any of the following 
 | Category        | Extensions                          | Processing Method |
 |----------------|--------------------------------------|-------------------|
 | **Direct 3D**  | `.stl`, `.obj`, `.3mf`               | Scene merging & manifold validation. |
-| **NURBS / CAD**| `.stp`, `.step`, `.igs`, `.iges`     | Converted via Gmsh, healed, and meshed. |
+| **NURBS / CAD**| `.stp`, `.step`, `.igs`, `.iges`     | Converted via Gmsh and meshed as-is (invalid geometry is rejected). |
 | **Comming soon!**     | `.dxf`, `.svg`, `.eps`, `.pdf`       | Polygon extraction and parameterized Z-extrusion. |
 | **Comming soon!**      | `.jpg`, `.jpeg`, `.png`, `.bmp`      | Grayscale heightmap generation (Lithophane style). |
 
@@ -81,7 +81,10 @@ git clone https://github.com/your-org/3D-Printer-Slicer-API-for-FDM-and-SLA_JS.g
 cd 3D-Printer-Slicer-API-for-FDM-and-SLA_JS
 
 # Build and start the service in detached mode
-docker-compose up -d --build
+docker compose up -d --build
+
+# Optional: start monitoring profile (Uptime Kuma)
+docker compose --profile monitoring up -d
 ```
 
 ### **Admin API Key**
@@ -89,7 +92,7 @@ docker-compose up -d --build
 Pricing mutations are protected via `x-api-key`.
 
 - `ADMIN_API_KEY` must be injected from environment (not hardcoded in Git).
-- Recommended: create a local `ADMIN_API_KEY.env` file (already ignored by Git):
+- Recommended: create a local `.env` file (already ignored by Git):
 
 ```bash
 ADMIN_API_KEY=change_this_to_a_long_random_secret
@@ -98,13 +101,13 @@ ADMIN_API_KEY=change_this_to_a_long_random_secret
 - Then run:
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-- On VPS, keep `ADMIN_API_KEY.env` with strict permissions:
+- On VPS, keep `.env` with strict permissions:
 
 ```bash
-chmod 600 ADMIN_API_KEY.env
+chmod 600 .env
 ```
 
 ### **3. Verify Health**
@@ -138,16 +141,42 @@ If `configs/pricing.json` does not exist, the API auto-creates it with default F
 
 ### Admin-Protected Endpoints
 
-- `PATCH /pricing/:technology/:material`
+- `POST /pricing/FDM`
+  - Header: `x-api-key: <ADMIN_API_KEY>`
+  - Body: `{ "material": "ASA", "price": 1200 }`
+  - Creates a new FDM material.
+
+- `POST /pricing/SLA`
+  - Header: `x-api-key: <ADMIN_API_KEY>`
+  - Body: `{ "material": "High-Temp", "price": 2600 }`
+  - Creates a new SLA material.
+
+- `PATCH /pricing/FDM/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 950 }`
-  - Technology is validated as `FDM` or `SLA` (case-insensitive).
-  - Price must be a positive number.
+  - Updates FDM material price.
 
-- `DELETE /pricing/:technology/:material`
+- `PATCH /pricing/SLA/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Deletes a material pricing entry.
-  - `default` material is protected and cannot be deleted.
+  - Body: `{ "price": 1800 }`
+  - Updates SLA material price.
+
+- `DELETE /pricing/FDM/:material`
+  - Header: `x-api-key: <ADMIN_API_KEY>`
+  - Deletes FDM material pricing entry.
+
+- `DELETE /pricing/SLA/:material`
+  - Header: `x-api-key: <ADMIN_API_KEY>`
+  - Deletes SLA material pricing entry.
+
+### Example (Create new FDM material)
+
+```bash
+curl -X POST http://localhost:3000/pricing/FDM \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
+  -d '{"material":"ASA","price":1200}'
+```
 
 ### Example (Update PETG)
 
@@ -209,4 +238,45 @@ You can customize pricing, security, and slicing behavior without changing endpo
   - *Default FDM:* 250 x 210 x 210 mm
   - *Default SLA:* 120 x 120 x 150 mm
 - **Slicer Profiles:** Stored in `configs/*.ini` (e.g. `FDM_0.2mm.ini`, `SLA_0.05mm.ini`).
-- **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex CAD healing operations.
+- **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations.
+- **Model Fidelity Policy:** Uploaded geometry is never auto-healed or shape-corrected; invalid/non-printable geometry is rejected with a clear error.
+
+---
+
+## 🛡️ Public Repo Security Checklist
+
+This project is safe to keep public **if** the following rules are always respected:
+
+1. Never commit `.env` or any API/SSH/private key files.
+2. Keep GitHub Actions secrets only in GitHub Secrets (`SERVER_IP`, `SERVER_USER`, `SERVER_PORT`, `SSH_PRIVATE_KEY`, etc.).
+3. Keep monitoring and deployment config public, but keep credentials private.
+4. Bind internal services to localhost (`127.0.0.1`) behind Nginx/Cloudflare.
+5. Rotate secrets immediately if they were ever exposed in chat, screenshots, logs, or commits.
+6. Use Cloudflare WAF + rate limits for `/slice` in production.
+
+Recommended pre-push check:
+
+```bash
+git status
+git grep -n "ADMIN_API_KEY\|PRIVATE KEY\|BEGIN RSA\|BEGIN OPENSSH" .
+```
+
+---
+
+## 📦 Release Log
+
+### `v1.0.0` - `v1.1.2`
+- Core slicing API for FDM/SLA.
+- Base conversion pipeline (CAD, mesh, image, vector).
+- Swagger docs, health checks, and pricing persistence.
+
+### `v2.0.0` Release
+- Strict model-fidelity processing (no auto-heal / no silent geometry repair).
+- Improved error handling (`INVALID_SOURCE_GEOMETRY`) for unsupported source geometry.
+- Dynamic Swagger docs for pricing materials (newly added materials appear in PATCH/DELETE selectors).
+- Pricing API expansion with material creation endpoints (`POST /pricing/FDM`, `POST /pricing/SLA`).
+- Production/dev container split (`docker-compose.yml` + `docker-compose.dev.yml`).
+- Docker hardening improvements (healthcheck, no-new-privileges, cap drop, non-root container user).
+- Monitoring profile integration (Uptime Kuma) and one-command monitoring setup script.
+- CI/CD workflow upgrade (validation job + safer VPS deployment flow).
+- Documentation hardening: VPS topology, Cloudflare guidance, and operational security checklist.

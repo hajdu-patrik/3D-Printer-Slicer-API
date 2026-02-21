@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## v2.1.1 (2026-02-21)
+
+### Changed
+
+- Standardized OpenAPI/Swagger pricing paths to canonical uppercase technology routes:
+  - `POST /pricing/FDM`
+  - `POST /pricing/SLA`
+  - `PATCH /pricing/FDM/:material`
+  - `PATCH /pricing/SLA/:material`
+  - `DELETE /pricing/FDM/:material`
+  - `DELETE /pricing/SLA/:material`
+- Added npm runtime scripts for faster local process start:
+  - `npm start`
+  - `npm run dev`
+
+### Documentation
+
+- Clarified in README that pricing technology path segments are case-sensitive and canonicalized as uppercase (`FDM`, `SLA`).
+- Added optional local Node runtime instructions (`npm start`, `npm run dev`) to README.
+
 ## v2.1.0 (2026-02-20)
 
 ### Changed

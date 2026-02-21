@@ -87,6 +87,16 @@ docker compose up -d --build
 docker compose --profile monitoring up -d
 ```
 
+### **Local Node Runtime (Optional)**
+
+If you want to run the API process directly (outside Docker), use the built-in npm scripts:
+
+```bash
+npm start
+# or
+npm run dev
+```
+
 ### **Admin API Key**
 
 Pricing mutations are protected via `x-api-key`.
@@ -141,38 +151,40 @@ If `configs/pricing.json` does not exist, the API auto-creates it with default F
 
 ### Admin-Protected Endpoints
 
-- `POST /pricing/fdm`
+> Pricing technology path segment is **case-sensitive** and canonicalized as uppercase (`FDM`, `SLA`).
+
+- `POST /pricing/FDM`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "ASA", "price": 1200 }`
   - Creates a new FDM material.
 
-- `POST /pricing/sla`
+- `POST /pricing/SLA`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "High-Temp", "price": 2600 }`
   - Creates a new SLA material.
 
-- `PATCH /pricing/fdm/:material`
+- `PATCH /pricing/FDM/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 950 }`
   - Updates FDM material price.
 
-- `PATCH /pricing/sla/:material`
+- `PATCH /pricing/SLA/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 1800 }`
   - Updates SLA material price.
 
-- `DELETE /pricing/fdm/:material`
+- `DELETE /pricing/FDM/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes FDM material pricing entry.
 
-- `DELETE /pricing/sla/:material`
+- `DELETE /pricing/SLA/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes SLA material pricing entry.
 
 ### Example (Create new FDM material)
 
 ```bash
-curl -X POST http://localhost:3000/pricing/fdm \
+curl -X POST http://localhost:3000/pricing/FDM \
   -H "Content-Type: application/json" \
   -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
   -d '{"material":"ASA","price":1200}'
@@ -181,7 +193,7 @@ curl -X POST http://localhost:3000/pricing/fdm \
 ### Example (Update PETG)
 
 ```bash
-curl -X PATCH http://localhost:3000/pricing/fdm/PETG \
+curl -X PATCH http://localhost:3000/pricing/FDM/PETG \
   -H "Content-Type: application/json" \
   -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
   -d '{"price":950}'
@@ -191,13 +203,13 @@ curl -X PATCH http://localhost:3000/pricing/fdm/PETG \
 
 ## 💻 Integration Example
 
-**Endpoint (FDM):** `POST /slice/fdm`
+**Endpoint (FDM):** `POST /slice/FDM`
 Generate an FDM slicing profile and price estimate by uploading a file.
 
 **cURL Request:**
 
 ```bash
-curl -X POST http://localhost:3000/slice/fdm \
+curl -X POST http://localhost:3000/slice/FDM \
   -H "Accept: application/json" \
   -F "choosenFile=@/path/to/your/model.step" \
   -F "layerHeight=0.2" \
@@ -225,10 +237,10 @@ curl -X POST http://localhost:3000/slice/fdm \
 }
 ```
 
-**Endpoint (SLA):** `POST /slice/sla`
+**Endpoint (SLA):** `POST /slice/SLA`
 
 ```bash
-curl -X POST http://localhost:3000/slice/sla \
+curl -X POST http://localhost:3000/slice/SLA \
   -H "Accept: application/json" \
   -F "choosenFile=@/path/to/your/model.stl" \
   -F "layerHeight=0.05" \
@@ -255,4 +267,4 @@ You can customize pricing, security, and slicing behavior without changing endpo
 
 ## 📦 Release Log
 
-Detailed version history and retroactive tag notes are maintained in [`CHANGELOG.md`](https://github.com/hajdu-patrik/3D-Printer-Slicer-API/blob/v2.1.0/CHANGELOG.md).
+Detailed version history and retroactive tag notes are maintained in [`CHANGELOG.md`](https://github.com/hajdu-patrik/3D-Printer-Slicer-API/blob/main/CHANGELOG.md).

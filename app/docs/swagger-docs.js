@@ -13,7 +13,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '2.1.0',
+            version: '2.1.1',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -44,7 +44,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/fdm': {
+        '/pricing/FDM': {
             post: {
                 tags: ['Pricing'],
                 summary: 'Create a new FDM material.',
@@ -81,7 +81,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/sla': {
+        '/pricing/SLA': {
             post: {
                 tags: ['Pricing'],
                 summary: 'Create a new SLA material.',
@@ -101,7 +101,7 @@ function createSwaggerDocument(pricing) {
                             schema: {
                                 type: 'object',
                                 properties: {
-                                    material: { type: 'string', example: 'DHigh-Templ', description: 'New SLA material name.' },
+                                    material: { type: 'string', example: 'High-Templ', description: 'New SLA material name.' },
                                     price: { type: 'number', example: 2400, description: 'Hourly price in HUF.' }
                                 },
                                 required: ['material', 'price']
@@ -118,7 +118,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/fdm/{material}': {
+        '/pricing/FDM/{material}': {
             patch: {
                 tags: ['Pricing'],
                 summary: 'Update or create FDM material price.',
@@ -185,7 +185,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/pricing/sla/{material}': {
+        '/pricing/SLA/{material}': {
             patch: {
                 tags: ['Pricing'],
                 summary: 'Update or create SLA material price.',
@@ -252,7 +252,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/slice/fdm': {
+        '/slice/FDM': {
             post: {
                 tags: ['Slicing'],
                 summary: 'FDM-only slicing endpoint.',
@@ -301,7 +301,7 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/slice/sla': {
+        '/slice/SLA': {
             post: {
                 tags: ['Slicing'],
                 summary: 'SLA-only slicing endpoint.',

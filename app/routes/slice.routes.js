@@ -22,11 +22,11 @@ const upload = multer({
 /**
  * FDM-only slice endpoint.
  */
-router.post('/slice/fdm', upload.any(), handleSliceFDM);
+router.post('/slice/FDM', upload.any(), handleSliceFDM);
 
 /**
  * SLA-only slice endpoint.
  */
-router.post('/slice/sla', upload.any(), handleSliceSLA);
+router.post('/slice/SLA', upload.any(), handleSliceSLA);
 
 module.exports = router;

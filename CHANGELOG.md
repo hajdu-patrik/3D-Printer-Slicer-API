@@ -16,11 +16,23 @@ All notable changes to this project are documented in this file.
 - Added npm runtime scripts for faster local process start:
   - `npm start`
   - `npm run dev`
+- Added IP-based rate limiting for slicing endpoints (`/slice/FDM`, `/slice/SLA`) with configurable limits.
+- Added bounded in-memory slicing queue with configurable concurrency, queue length, and queue timeout.
+- Added ZIP archive guard logic to mitigate zip bombs and path traversal:
+  - max ZIP entries
+  - max cumulative uncompressed size
+  - encrypted ZIP rejection
+  - unsafe path rejection (`../`, absolute paths)
+- Added request size hardening:
+  - multipart upload limit for model uploads
+  - JSON and urlencoded body size limits
+- Hardened monitoring exposure by adding Nginx Basic Auth requirement in `ops/monitoring/setup-monitoring.sh` and monitor vhost template.
 
 ### Documentation
 
 - Clarified in README that pricing technology path segments are case-sensitive and canonicalized as uppercase (`FDM`, `SLA`).
 - Added optional local Node runtime instructions (`npm start`, `npm run dev`) to README.
+- Added security/hardening configuration details to README (rate limit, queue settings, ZIP limits, body/upload limits, monitoring Basic Auth usage).
 
 ## v2.1.0 (2026-02-20)
 

@@ -27,6 +27,10 @@ Built for **Zero-Downtime deployment**, this API is designed to serve as the bac
 
 - 🛡️ **Robust Pre-Flight Checks:** Prevents server crashes by validating physical dimensions against maximum build volumes before initiating CPU-intensive slicing.
 
+- 🚦 **Abuse Protection:** Per-IP rate limiting and bounded in-memory slicing queue protect CPU/RAM from request floods.
+
+- 🧨 **ZIP Bomb Guard:** ZIP uploads are validated before extraction (entry-count, uncompressed-size, path traversal, encrypted ZIP rejection).
+
 - 📦 **Automated Resource Management:** Self-cleaning infrastructure with ZIP archive extraction and scheduled `.gcode` / `.sl1` file purging.
 
 ---
@@ -47,7 +51,7 @@ The solution follows a modular, containerized architecture ensuring high availab
 | **config/**       | Runtime Config     | Shared constants and filesystem paths used across modules. |
 | **Python Converters** | Geometry Processors | Specialized scripts (`cad2stl.py`, `vector2stl.py`, etc.) powered by Gmsh and Shapely with strict model-fidelity mode (no automatic geometry repair). |
 | **PrusaSlicer CLI** | The Slicing Engine | Headless execution of PrusaSlicer for toolpath generation, support creation, and rasterization. |
-| **Docker (Ubuntu)** | The Sandbox        | An isolated, dependency-rich environment containing X11 libraries, C++ binaries, and Node/Python runtimes. |
+| **Docker (node:20-bookworm-slim)** | The Sandbox        | An isolated, dependency-rich runtime containing PrusaSlicer, Node.js, Python, and geometry conversion libraries. |
 
 
 ---
@@ -128,6 +132,18 @@ Ensure the service is running and ready to accept connections:
 curl http://localhost:3000/health
 # Response: {"status":"OK","uptime":14.32}
 ```
+
+### **4. Monitoring Hardening (Uptime Kuma behind Basic Auth)**
+
+The monitor setup script now requires Basic Auth credentials and protects the Nginx monitor vhost by default.
+
+```bash
+MONITOR_BASIC_AUTH_USER=admin \
+MONITOR_BASIC_AUTH_PASSWORD='StrongPassword123!' \
+sudo bash ops/monitoring/setup-monitoring.sh monitor.example.com /path/to/project
+```
+
+> Recommended in production: keep Cloudflare Access (Zero Trust) in front of this endpoint as an extra layer.
 
 ---
 
@@ -259,6 +275,12 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Build Volumes:** Pre-flight checks protect the server from processing models that exceed physical dimensions.
   - *Default FDM:* 250 x 210 x 210 mm
   - *Default SLA:* 120 x 120 x 150 mm
+- **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `5` requests / `60s`).
+- **Slicing Queue:** CPU-heavy slice jobs are queued and processed with bounded concurrency (`MAX_CONCURRENT_SLICES`, default = CPU cores).
+- **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
+- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `100MB`).
+- **ZIP Safety Limits:** ZIP extraction is guarded by max entries and max cumulative extracted size (`MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`).
+- **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/*.ini` (e.g. `FDM_0.2mm.ini`, `SLA_0.05mm.ini`).
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations.
 - **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.

@@ -6,6 +6,9 @@
 const { exec } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { pipeline } = require('node:stream/promises');
+const yauzl = require('yauzl');
 const { MAX_BUILD_VOLUMES, EXTENSIONS } = require('../config/constants');
 const { OUTPUT_DIR, CONFIGS_DIR } = require('../config/paths');
 const { logError } = require('../utils/logger');
@@ -14,6 +17,228 @@ const { getRate } = require('./pricing.service');
 const DEBUG_COMMAND_LOGS = process.env.DEBUG_COMMAND_LOGS === 'true';
 const MAX_LOG_OUTPUT = 4000;
 
+/**
+ * Parse positive integer values with a safe fallback.
+ * @param {string | number | undefined} value Source value.
+ * @param {number} fallback Fallback integer.
+ * @returns {number} Positive integer result.
+ */
+function parsePositiveInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
+const MAX_ZIP_UNCOMPRESSED_BYTES = parsePositiveInt(
+    process.env.MAX_ZIP_UNCOMPRESSED_BYTES || `${DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES}`,
+    DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES
+);
+const MAX_ZIP_ENTRIES = parsePositiveInt(process.env.MAX_ZIP_ENTRIES || '200', 200);
+const MAX_SLICE_QUEUE_LENGTH = parsePositiveInt(process.env.MAX_SLICE_QUEUE_LENGTH || '100', 100);
+const MAX_SLICE_QUEUE_WAIT_MS = parsePositiveInt(process.env.MAX_SLICE_QUEUE_WAIT_MS || '300000', 300000);
+const MAX_CONCURRENT_SLICES = parsePositiveInt(
+    process.env.MAX_CONCURRENT_SLICES || `${Math.max(1, os.cpus().length)}`,
+    Math.max(1, os.cpus().length)
+);
+
+const sliceQueue = [];
+let activeSliceJobs = 0;
+
+/**
+ * Dispatch waiting slice jobs while free execution slots are available.
+ * Concurrency is bounded by `MAX_CONCURRENT_SLICES`.
+ * @returns {void}
+ */
+function runNextSliceJob() {
+    while (activeSliceJobs < MAX_CONCURRENT_SLICES && sliceQueue.length > 0) {
+        const nextJob = sliceQueue.shift();
+        const waitedMs = Date.now() - nextJob.enqueuedAt;
+
+        if (waitedMs > MAX_SLICE_QUEUE_WAIT_MS) {
+            nextJob.reject(new Error('QUEUE_TIMEOUT|Slice job timed out while waiting in queue.'));
+            continue;
+        }
+
+        activeSliceJobs += 1;
+
+        nextJob
+            .task()
+            .then(nextJob.resolve)
+            .catch(nextJob.reject)
+            .finally(() => {
+                activeSliceJobs -= 1;
+                runNextSliceJob();
+            });
+    }
+}
+
+/**
+ * Queue a slicing task and execute it when capacity becomes available.
+ * @template T
+ * @param {() => Promise<T>} task Async slicing task.
+ * @returns {Promise<T>} Task result once executed.
+ */
+function enqueueSliceJob(task) {
+    return new Promise((resolve, reject) => {
+        if (sliceQueue.length >= MAX_SLICE_QUEUE_LENGTH) {
+            reject(new Error('QUEUE_FULL|Slice queue is full. Please retry later.'));
+            return;
+        }
+
+        sliceQueue.push({ task, resolve, reject, enqueuedAt: Date.now() });
+        runNextSliceJob();
+    });
+}
+
+/**
+ * Open ZIP archive in lazy-entry mode for safe bounded traversal.
+ * @param {string} zipPath Path to ZIP file.
+ * @returns {Promise<import('yauzl').ZipFile>} Opened zip handle.
+ */
+function openZip(zipPath) {
+    return new Promise((resolve, reject) => {
+        yauzl.open(zipPath, { lazyEntries: true }, (err, zipFile) => {
+            if (err) return reject(err);
+            return resolve(zipFile);
+        });
+    });
+}
+
+/**
+ * Detect unsafe ZIP entry names (path traversal / absolute paths).
+ * @param {string} entryPath ZIP internal entry name.
+ * @returns {boolean} True when the entry path is unsafe.
+ */
+function isUnsafeZipPath(entryPath) {
+    const normalized = path.posix.normalize(entryPath).replaceAll('\\', '/');
+    if (path.posix.isAbsolute(normalized)) return true;
+    return normalized.split('/').includes('..');
+}
+
+/**
+ * Inspect ZIP entries before extraction to enforce anti-zip-bomb constraints.
+ * Validates entry count, cumulative uncompressed size, encrypted entries, and path safety.
+ * @param {string} zipPath Path to ZIP archive.
+ * @param {Set<string>} supportedExts Allowed extension set.
+ * @returns {Promise<string[]>} Candidate entry names matching supported extensions.
+ */
+async function inspectZipFile(zipPath, supportedExts) {
+    const zipFile = await openZip(zipPath);
+
+    return new Promise((resolve, reject) => {
+        let totalUncompressed = 0;
+        let entryCount = 0;
+        const candidates = [];
+
+        zipFile.on('entry', (entry) => {
+            entryCount += 1;
+            if (entryCount > MAX_ZIP_ENTRIES) {
+                zipFile.close();
+                reject(new Error('ZIP_GUARD|ZIP contains too many files.'));
+                return;
+            }
+
+            if (entry.generalPurposeBitFlag & 0x1) {
+                zipFile.close();
+                reject(new Error('ZIP_GUARD|Encrypted ZIP files are not supported.'));
+                return;
+            }
+
+            if (isUnsafeZipPath(entry.fileName)) {
+                zipFile.close();
+                reject(new Error('ZIP_GUARD|ZIP contains unsafe file paths.'));
+                return;
+            }
+
+            totalUncompressed += entry.uncompressedSize;
+            if (totalUncompressed > MAX_ZIP_UNCOMPRESSED_BYTES) {
+                zipFile.close();
+                reject(new Error('ZIP_GUARD|ZIP extracted size exceeds allowed limit.'));
+                return;
+            }
+
+            if (!entry.fileName.endsWith('/')) {
+                const ext = path.extname(entry.fileName).toLowerCase();
+                if (supportedExts.has(ext)) {
+                    candidates.push(entry.fileName);
+                }
+            }
+
+            zipFile.readEntry();
+        });
+
+        zipFile.once('end', () => {
+            zipFile.close();
+            resolve(candidates);
+        });
+
+        zipFile.once('error', (err) => {
+            reject(err);
+        });
+
+        zipFile.readEntry();
+    });
+}
+
+/**
+ * Extract a single validated ZIP entry to destination path.
+ * @param {string} zipPath Path to ZIP archive.
+ * @param {string} entryName Entry name inside ZIP.
+ * @param {string} destinationPath Absolute output path.
+ * @returns {Promise<string>} Extracted file path.
+ */
+async function extractZipEntry(zipPath, entryName, destinationPath) {
+    const zipFile = await openZip(zipPath);
+
+    return new Promise((resolve, reject) => {
+        let extracted = false;
+
+        zipFile.on('entry', (entry) => {
+            if (entry.fileName !== entryName) {
+                zipFile.readEntry();
+                return;
+            }
+
+            extracted = true;
+
+            zipFile.openReadStream(entry, async (err, readStream) => {
+                if (err) {
+                    zipFile.close();
+                    reject(err);
+                    return;
+                }
+
+                try {
+                    await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
+                    await pipeline(readStream, fs.createWriteStream(destinationPath, { flags: 'w' }));
+                    zipFile.close();
+                    resolve(destinationPath);
+                } catch (error_) {
+                    zipFile.close();
+                    reject(error_);
+                }
+            });
+        });
+
+        zipFile.once('end', () => {
+            if (!extracted) {
+                reject(new Error('ZIP_GUARD|No supported file found in ZIP archive.'));
+            }
+        });
+
+        zipFile.once('error', (err) => {
+            reject(err);
+        });
+
+        zipFile.readEntry();
+    });
+}
+
+/**
+ * Truncate command output for safe/compact logging.
+ * @param {string} text Command output text.
+ * @returns {string} Original or truncated text.
+ */
 function truncateLogOutput(text) {
     if (!text || text.length <= MAX_LOG_OUTPUT) return text;
     return `${text.slice(0, MAX_LOG_OUTPUT)}\n...[truncated]`;
@@ -273,13 +498,20 @@ async function processSlice(req, res, forcedTechnology = null) {
             if (!fs.existsSync(unzipDir)) fs.mkdirSync(unzipDir);
 
             filesCleanupList.push(unzipDir);
-
-            await runCommand(`unzip -o "${inputFile}" -d "${unzipDir}"`);
-
-            const files = fs.readdirSync(unzipDir);
             const supportedExts = new Set([...EXTENSIONS.direct, ...EXTENSIONS.cad, ...EXTENSIONS.image, ...EXTENSIONS.vector]);
 
-            const foundFile = files.find((f) => supportedExts.has(path.extname(f).toLowerCase()));
+            const zipCandidates = await inspectZipFile(inputFile, supportedExts);
+            const selectedEntry = zipCandidates[0];
+
+            if (!selectedEntry) throw new Error('ZIP does not contain a supported 3D/Image/Vector file.');
+
+            const selectedName = path.basename(selectedEntry);
+            const extractedPath = path.join(unzipDir, selectedName);
+
+            await extractZipEntry(inputFile, selectedEntry, extractedPath);
+
+            const extractedFiles = fs.readdirSync(unzipDir);
+            const foundFile = extractedFiles.find((f) => supportedExts.has(path.extname(f).toLowerCase()));
 
             if (!foundFile) throw new Error('ZIP does not contain a supported 3D/Image/Vector file.');
 
@@ -416,11 +648,59 @@ async function processSlice(req, res, forcedTechnology = null) {
 }
 
 async function handleSliceFDM(req, res) {
-    return processSlice(req, res, 'FDM');
+    try {
+        return await enqueueSliceJob(() => processSlice(req, res, 'FDM'));
+    } catch (err) {
+        if (err.message.startsWith('QUEUE_FULL|')) {
+            return res.status(503).json({
+                success: false,
+                error: err.message.split('|')[1],
+                errorCode: 'SLICE_QUEUE_FULL'
+            });
+        }
+
+        if (err.message.startsWith('QUEUE_TIMEOUT|')) {
+            return res.status(503).json({
+                success: false,
+                error: err.message.split('|')[1],
+                errorCode: 'SLICE_QUEUE_TIMEOUT'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            error: 'Queue processing failed.',
+            errorCode: 'QUEUE_INTERNAL_ERROR'
+        });
+    }
 }
 
 async function handleSliceSLA(req, res) {
-    return processSlice(req, res, 'SLA');
+    try {
+        return await enqueueSliceJob(() => processSlice(req, res, 'SLA'));
+    } catch (err) {
+        if (err.message.startsWith('QUEUE_FULL|')) {
+            return res.status(503).json({
+                success: false,
+                error: err.message.split('|')[1],
+                errorCode: 'SLICE_QUEUE_FULL'
+            });
+        }
+
+        if (err.message.startsWith('QUEUE_TIMEOUT|')) {
+            return res.status(503).json({
+                success: false,
+                error: err.message.split('|')[1],
+                errorCode: 'SLICE_QUEUE_TIMEOUT'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            error: 'Queue processing failed.',
+            errorCode: 'QUEUE_INTERNAL_ERROR'
+        });
+    }
 }
 
 module.exports = {

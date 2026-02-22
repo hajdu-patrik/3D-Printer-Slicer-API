@@ -1,9 +1,8 @@
-trimesh[easy]==4.11.2
+trimesh==4.11.2
 ezdxf==1.4.3
 shapely==2.1.2
 svg.path==7.0
 gmsh==4.15.1
 numpy-stl==3.2.0
-scipy==1.17.0
 Pillow==12.1.1
 numpy==2.4.2

@@ -27,7 +27,8 @@ loadPricingFromDisk();
 /** @type {import('express').Express} */
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || '1mb' }));
 
 // Serve static files (like generated STL files)
 app.use('/download', express.static(path.join(OUTPUT_DIR)));
@@ -43,17 +44,20 @@ const swaggerUiOptions = {
     customCss: '.parameters-col_description .parameter__in { display: none !important; }'
 };
 
+// Helper function to set no-cache headers for API documentation endpoints
 function setNoCacheHeaders(res) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 }
 
+// API Documentation endpoints
 app.get('/openapi.json', (req, res) => {
     setNoCacheHeaders(res);
     return res.status(200).json(createSwaggerDocument(getPricing()));
 });
 
+// Serve Swagger UI with custom options and no-cache headers
 app.use(
     '/docs',
     swaggerUi.serve,

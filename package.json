@@ -7,9 +7,10 @@
     "dev": "node --watch app/server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
     "cors": "^2.8.5",
-    "swagger-ui-express": "^5.0.0"
+    "express": "^4.18.2",
+    "multer": "^2.0.2",
+    "swagger-ui-express": "^5.0.0",
+    "yauzl": "^3.2.0"
   }
 }

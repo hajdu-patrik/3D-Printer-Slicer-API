@@ -35,27 +35,6 @@ Built for **Zero-Downtime deployment**, this API is designed to serve as the bac
 
 ---
 
-## 🏗️ Architecture & Component Breakdown
-
-The solution follows a modular, containerized architecture ensuring high availability and fault tolerance during heavy CAD operations.
-
-### Component / Role / Description
-
-| Component          | Role               | Description |
-|-------------------|--------------------|-------------|
-| **server.js**     | Bootstrap Layer    | Minimal Express startup file that wires middleware, Swagger, routes, and startup initialization. |
-| **routes/**       | HTTP Routing Layer | Endpoint separation by concern (`slice.routes.js`, `pricing.routes.js`, `system.routes.js`). |
-| **services/**     | Business Logic     | Slicing pipeline and dynamic pricing persistence (`slice.service.js`, `pricing.service.js`). |
-| **middleware/**   | Security Layer     | API-key authorization middleware for admin-only pricing mutations. |
-| **docs/**         | API Schema         | Centralized OpenAPI document (`swagger-docs.js`) served by Swagger UI. |
-| **config/**       | Runtime Config     | Shared constants and filesystem paths used across modules. |
-| **Python Converters** | Geometry Processors | Specialized scripts (`cad2stl.py`, `vector2stl.py`, etc.) powered by Gmsh and Shapely with strict model-fidelity mode (no automatic geometry repair). |
-| **PrusaSlicer CLI** | The Slicing Engine | Headless execution of PrusaSlicer for toolpath generation, support creation, and rasterization. |
-| **Docker (node:20-bookworm-slim)** | The Sandbox        | An isolated, dependency-rich runtime containing PrusaSlicer, Node.js, Python, and geometry conversion libraries. |
-
-
----
-
 ## 📂 Supported File Formats
 
 The API accepts single files or `.zip` archives containing any of the following formats:
@@ -69,169 +48,54 @@ The API accepts single files or `.zip` archives containing any of the following 
 
 ---
 
-## 🚀 Getting Started
-
-### **1. Prerequisites**
-- Docker Engine & Docker Compose
-- Minimum 4GB RAM (Swap space recommended for heavy CAD operations)
-
-### **2. Deployment**
-
-The API is containerized for instant deployment.
-```bash
-# Clone the repository
-git clone https://github.com/hajdu-patrik/3D-Printer-Slicer-API.git
-
-cd 3D-Printer-Slicer-API
-
-# Build and start the service in detached mode
-docker compose up -d --build
-
-# Optional: start monitoring profile (Uptime Kuma)
-docker compose --profile monitoring up -d
-```
-
-### **Local Node Runtime (Optional)**
-
-If you want to run the API process directly (outside Docker), use the built-in npm scripts:
-
-```bash
-npm start
-# or
-npm run dev
-```
-
-### **Admin API Key**
-
-Pricing mutations are protected via `x-api-key`.
-
-- `ADMIN_API_KEY` must be injected from environment (not hardcoded in Git).
-- Recommended: create a local `.env` file (already ignored by Git):
-
-```bash
-ADMIN_API_KEY=change_this_to_a_long_random_secret
-```
-
-- Then run:
-
-```bash
-docker compose up -d --build
-```
-
-- On VPS, keep `.env` with strict permissions:
-
-```bash
-chmod 600 .env
-```
-
-### **3. Verify Health**
-
-Ensure the service is running and ready to accept connections:
-
-```bash
-curl http://localhost:3000/health
-# Response: {"status":"OK","uptime":14.32}
-```
-
-### **4. Monitoring Hardening (Uptime Kuma behind Basic Auth)**
-
-The monitor setup script now requires Basic Auth credentials and protects the Nginx monitor vhost by default.
-
-```bash
-MONITOR_BASIC_AUTH_USER=admin \
-MONITOR_BASIC_AUTH_PASSWORD='StrongPassword123!' \
-sudo bash ops/monitoring/setup-monitoring.sh monitor.example.com /path/to/project
-```
-
-> Recommended in production: keep Cloudflare Access (Zero Trust) in front of this endpoint as an extra layer.
-
----
-
-## 🔌 API Documentation (Swagger)
-
-A fully interactive OpenAPI 3.0 documentation is automatically served. Once the container is running, visit:
-👉 http://localhost:3000/docs
-
----
-
-## 💵 Pricing Management API (Runtime CRUD)
+## 🧠 Learn how to use the API
 
 Pricing is now **persistent** and loaded from `configs/pricing.json` at startup.
 
 If `configs/pricing.json` does not exist, the API auto-creates it with default FDM/SLA pricing.
 
-### Public Endpoint
+### Pricing Management Endpoint (Public)
 
 - `GET /pricing`
   - Returns full pricing object.
 
-### Admin-Protected Endpoints
+### Pricing Management Endpoints (Admin-Protected)
 
 > Pricing technology path segment is **case-sensitive** and canonicalized as uppercase (`FDM`, `SLA`).
 
-- `POST /pricing/FDM`
+#### `POST /pricing/FDM`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "ASA", "price": 1200 }`
   - Creates a new FDM material.
 
-- `POST /pricing/SLA`
+#### `POST /pricing/SLA`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "material": "High-Temp", "price": 2600 }`
   - Creates a new SLA material.
 
-- `PATCH /pricing/FDM/:material`
+#### `PATCH /pricing/FDM/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 950 }`
   - Updates FDM material price.
 
-- `PATCH /pricing/SLA/:material`
+#### `PATCH /pricing/SLA/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Body: `{ "price": 1800 }`
   - Updates SLA material price.
 
-- `DELETE /pricing/FDM/:material`
+#### `DELETE /pricing/FDM/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes FDM material pricing entry.
 
-- `DELETE /pricing/SLA/:material`
+#### `DELETE /pricing/SLA/:material`
   - Header: `x-api-key: <ADMIN_API_KEY>`
   - Deletes SLA material pricing entry.
 
-### Example (Create new FDM material)
 
-```bash
-curl -X POST http://localhost:3000/pricing/FDM \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
-  -d '{"material":"ASA","price":1200}'
-```
+### Slicing Endpoints (Public)
 
-### Example (Update PETG)
-
-```bash
-curl -X PATCH http://localhost:3000/pricing/FDM/PETG \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: <YOUR_ADMIN_API_KEY>" \
-  -d '{"price":950}'
-```
-
----
-
-## 💻 Integration Example
-
-**Endpoint (FDM):** `POST /slice/FDM`
-Generate an FDM slicing profile and price estimate by uploading a file.
-
-**cURL Request:**
-
-```bash
-curl -X POST http://localhost:3000/slice/FDM \
-  -H "Accept: application/json" \
-  -F "choosenFile=@/path/to/your/model.step" \
-  -F "layerHeight=0.2" \
-  -F "material=PETG" \
-  -F "infill=20"
-```
+#### `POST /slice/FDM`
+Generate a FDM slicing profile and price estimate by uploading a file.
 
 **JSON Response:**
 
@@ -253,7 +117,8 @@ curl -X POST http://localhost:3000/slice/FDM \
 }
 ```
 
-**Endpoint (SLA):** `POST /slice/SLA`
+#### `POST /slice/SLA`
+Generate a SLA slicing profile and price estimate by uploading a file.
 
 ```bash
 curl -X POST http://localhost:3000/slice/SLA \
@@ -261,6 +126,26 @@ curl -X POST http://localhost:3000/slice/SLA \
   -F "choosenFile=@/path/to/your/model.stl" \
   -F "layerHeight=0.05" \
   -F "material=Standard"
+```
+
+**JSON Response:**
+
+```json
+{
+  "success": true,
+  "technology": "SLA",
+  "material": "Standard",
+  "infill": "20%",
+  "hourly_rate": 1800,
+  "stats": {
+    "print_time_seconds": 1990,
+    "print_time_readable": "0h 33m (Est.)",
+    "material_used_m": 0,
+    "object_height_mm": 8.5,
+    "estimated_price_huf": 1000
+  },
+  "download_url": "/download/output-1771759425979.sl1"
+}
 ```
 
 ---

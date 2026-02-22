@@ -10,7 +10,7 @@
 ![Status](https://img.shields.io/badge/Status-Live_Production-success?style=flat)
 
 
-# 3D Printer Slicer & Pricing API (FDM & SLA)
+# 3D Printer Slicer API (FDM & SLA)
 
 An automated 3D slicing and pricing API built with `Node.js` and `Python` that seamlessly converts various 2D and 3D file formats into ready-to-print models using the PrusaSlicer engine. It provides automated part orientation, intelligent slicing, and dynamic cost estimation for both **FDM** and **SLA** printing technologies.
 

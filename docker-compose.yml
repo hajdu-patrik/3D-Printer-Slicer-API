@@ -1,7 +1,7 @@
 services:
   slicer-api:
     build: .
-    image: 3d-printer-slicer-api:v2.1.2
+    image: 3d-printer-slicer-api:v2.2.0
     container_name: 3d-printer-slicer-api-backend-server
     user: ${SLICER_CONTAINER_USER:-0:0}
     env_file:

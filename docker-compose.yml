@@ -27,10 +27,9 @@ services:
         max-size: "20m"
         max-file: "5"
     volumes:
-      # --- Datas & Logs ---
+      # --- Runtime data ---
       - ./input:/app/input
       - ./output:/app/output
-      - ./logs:/app/logs
       
       # --- Configurations ---
       - ./configs:/app/configs

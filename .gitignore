@@ -20,10 +20,16 @@ venv/
 .DS_Store
 
 # Runtime output
-input/*
-output/*
-tests/testing-files/
+input/**
+!input/.gitkeep
+output/**
+!output/.gitkeep
+
+# Test assets (publish runners, keep heavy sample files private)
+tests/testing-files/**
+!tests/testing-files/.gitkeep
+tests/testing-scripts/results/**
+!tests/testing-scripts/results/.gitkeep
 
 # Config data
-!configs/.gitkeep
-!configs/pricing.json
+configs/pricing.json

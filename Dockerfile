@@ -110,7 +110,7 @@ RUN groupadd --system --gid 1001 slicer \
         --shell /usr/sbin/nologin \
         --comment "PrusaSlicer runtime user" \
         slicer \
-    && mkdir -p /app/input /app/output /app/logs \
+    && mkdir -p /app/input /app/output \
     && chown -R slicer:slicer /app /home/slicer
 
 # Copy application code with minimal layers

@@ -1,11 +1,23 @@
 services:
   slicer-api:
+    command: node --watch server.js
     volumes:
-      # --- Live code mounts for local development ---
-      - ./app/static:/app/static
+      # --- Full app source in sync (JS + PY) ---
       - ./app/server.js:/app/server.js
-      - ./app/img2stl.py:/app/img2stl.py
-      - ./app/vector2stl.py:/app/vector2stl.py
-      - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/cad2stl.py:/app/cad2stl.py
+      - ./app/img2stl.py:/app/img2stl.py
+      - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/orient.py:/app/orient.py
+      - ./app/vector2stl.py:/app/vector2stl.py
+      - ./app/config:/app/config
+      - ./app/docs:/app/docs
+      - ./app/middleware:/app/middleware
+      - ./app/routes:/app/routes
+      - ./app/services:/app/services
+      - ./app/static:/app/static
+      - ./app/utils:/app/utils
+
+      # --- Shared runtime/state folders (host <-> container) ---
+      - ./input:/app/input
+      - ./output:/app/output
+      - ./configs:/app/configs

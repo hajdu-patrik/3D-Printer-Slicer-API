@@ -2,7 +2,7 @@
  * Middleware that validates admin API key access for protected routes.
  */
 
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+const ADMIN_API_KEY = String(process.env.ADMIN_API_KEY || '').trim();
 
 /**
  * Enforce `x-api-key` based authentication for admin operations.
@@ -17,7 +17,7 @@ function requireAdmin(req, res, next) {
         return res.status(503).json({ success: false, error: 'Admin API key is not configured on server.' });
     }
 
-    const apiKey = req.header('x-api-key');
+    const apiKey = String(req.header('x-api-key') || '').trim();
     if (!apiKey || apiKey !== ADMIN_API_KEY) {
         console.warn(`[SECURITY WARNING] Unauthorized pricing access attempt from ${req.ip} on ${req.method} ${req.originalUrl}`);
         return res.status(401).json({ success: false, error: 'Unauthorized' });

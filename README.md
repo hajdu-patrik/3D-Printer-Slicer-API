@@ -173,7 +173,7 @@ curl -X POST http://localhost:3000/slice/SLA \
   "total": 2,
   "files": [
     {
-      "fileName": "output-1771944598794.gcode",
+      "fileName": "Cactus-output-1772126605107.gcode",
       "sizeBytes": 409600,
       "createdAt": "2026-02-24T15:10:00.000Z",
       "modifiedAt": "2026-02-24T15:10:01.000Z"
@@ -182,6 +182,11 @@ curl -X POST http://localhost:3000/slice/SLA \
 }
 ```
 
+Generated artifacts are stored with the following convention for clarity and traceability:
+
+- `InputName-output-<timestamp>.gcode`
+- `InputName-output-<timestamp>.sl1`
+
 Common slicing error responses:
 - `INVALID_SOURCE_ARCHIVE` → uploaded ZIP is invalid or does not contain a supported file.
 - `INVALID_SOURCE_GEOMETRY` → uploaded source geometry is invalid/non-printable and auto-repair is disabled.
@@ -189,7 +194,7 @@ Common slicing error responses:
 
 ---
 
-## 🔏 Learn how to setup `.env`, configs, input/output
+## 🔏 Learn how to setup the `.env`, configs, input/output
 
 1. Create your env file from template:
 
@@ -210,6 +215,9 @@ cp .env.template .env
 - `input/` → temporary working input directory used during conversion/slicing pipeline.
 - `output/` → generated output artifacts (`.gcode`, `.sl1`, etc.).
 - `configs/` → slicer profile `.ini` files + persistent `pricing.json`.
+
+Runtime paths are root-scoped in both local and Docker execution.
+No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` are intentionally not used).
 
 ### Config files you can use out-of-the-box
 
@@ -239,6 +247,14 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Slicer Profiles:** Stored in `configs/*.ini` (e.g. `FDM_0.2mm.ini`, `SLA_0.05mm.ini`).
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
 - **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
+
+---
+
+## 🧪 Test publication policy
+
+- `tests/testing-scripts/` is intended to be public and versioned.
+- `tests/testing-files/` sample payloads are intentionally excluded from repository publication.
+- `tests/testing-scripts/results/` generated reports are runtime artifacts and are ignored.
 
 ---
 

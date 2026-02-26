@@ -2,6 +2,43 @@
 
 All notable changes to this project are documented in this file.
 
+## v2.3.0 (2026-02-26)
+
+### Changed
+
+- Finalized Docker ↔ local workspace synchronization for active runtime paths:
+  - shared bind mounts for `input/`, `output/`, and `configs/`
+  - shared app-source mounts for JS/PY runtime code in development compose
+- Enforced root-only runtime directory policy:
+  - removed legacy app-local runtime folders (`app/input`, `app/output`, `app/configs`)
+  - removed legacy app-local pricing file (`app/config/pricing.json`)
+  - runtime now uses root `configs/pricing.json` as the single pricing source of truth
+- Removed project-level logs folder coupling:
+  - deleted `./logs:/app/logs` compose binds
+  - removed `/app/logs` creation from image build
+- Clarified and enforced generated output naming convention:
+  - `InputName-output-<timestamp>.gcode`
+  - `InputName-output-<timestamp>.sl1`
+- Continued decomposition of the earlier oversized slicing flow (`slicing.js` legacy concept) into focused modules:
+  - `app/services/slice.service.js`
+  - `app/services/slice/command.js`
+  - `app/services/slice/queue.js`
+  - `app/services/slice/zip.js`
+
+### Repository policy
+
+- Publishing policy updated for tests and runtime artifact folders:
+  - `tests/testing-scripts/` remains publishable
+  - `tests/testing-files/` is excluded from publication
+  - `input/` and `output/` are kept as empty tracked folders (`.gitkeep` only)
+
+### Documentation
+
+- Updated README and test documentation to reflect:
+  - new output filename convention
+  - root runtime folders and pricing persistence path
+  - test publication/ignore behavior and corrected `testing-files` path naming
+
 ## v2.2.2 (2026-02-25)
 
 ### Added

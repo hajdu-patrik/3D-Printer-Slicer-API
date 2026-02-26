@@ -13,7 +13,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '2.2.2',
+            version: '2.3.0',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -366,13 +366,14 @@ function createSwaggerDocument(pricing) {
                                     type: 'object',
                                     properties: {
                                         success: { type: 'boolean', example: true },
+                                        message: { type: 'string', example: 'Output directory is empty.' },
                                         total: { type: 'integer', example: 12 },
                                         files: {
                                             type: 'array',
                                             items: {
                                                 type: 'object',
                                                 properties: {
-                                                    fileName: { type: 'string', example: 'output-1771944598794.gcode' },
+                                                    fileName: { type: 'string', example: 'Cactus-output-1772126605107.gcode' },
                                                     sizeBytes: { type: 'integer', example: 409600 },
                                                     createdAt: { type: 'string', format: 'date-time' },
                                                     modifiedAt: { type: 'string', format: 'date-time' }

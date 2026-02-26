@@ -1,0 +1,314 @@
+"""Pricing API cycle integration test.
+
+Runs a full lifecycle for both FDM and SLA pricing materials:
+- create material
+- update material price
+- verify via GET /pricing
+- delete material
+- verify deletion via GET /pricing
+
+Auth:
+- Reads ADMIN_API_KEY from environment first
+- Falls back to parsing project .env file
+"""
+
+from __future__ import annotations
+
+import json
+import secrets
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+TESTS_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = TESTS_ROOT.parent.parent
+RESULTS_DIR = TESTS_ROOT / "results"
+from common.env_utils import resolve_admin_key_candidates, resolve_base_url
+from common.http_utils import curl_json
+
+
+@dataclass
+class StepResult:
+    technology: str
+    material: str
+    step: str
+    method: str
+    endpoint: str
+    expected_status: int
+    http_status: int
+    success: bool
+    details: str
+    body: dict | str | None
+
+
+def _read_admin_api_key_candidates() -> list[str]:
+    candidates = resolve_admin_key_candidates(PROJECT_ROOT)
+    if not candidates:
+        raise RuntimeError("ADMIN_API_KEY not found in .env or process environment.")
+    return candidates
+
+
+def _curl_request(base_url: str, method: str, endpoint: str, body: dict | None = None, api_key: str | None = None) -> tuple[int, dict | str | None]:
+    return curl_json(
+        method=method,
+        base_url=base_url,
+        endpoint=endpoint,
+        json_body=body,
+        api_key=api_key,
+    )
+
+
+def _authorized_request_with_fallback(base_url: str, method: str, endpoint: str, body: dict | None, api_keys: list[str]) -> tuple[int, dict | str | None]:
+    status, payload = 0, None
+    for key in api_keys:
+        status, payload = _curl_request(base_url, method, endpoint, body=body, api_key=key)
+        if status != 401:
+            return status, payload
+    return status, payload
+
+
+def _record(results: list[StepResult], *, technology: str, material: str, step: str, method: str, endpoint: str, expected_status: int, actual_status: int, ok: bool, details: str, body: dict | str | None) -> None:
+    results.append(
+        StepResult(
+            technology=technology,
+            material=material,
+            step=step,
+            method=method,
+            endpoint=endpoint,
+            expected_status=expected_status,
+            http_status=actual_status,
+            success=ok,
+            details=details,
+            body=body,
+        )
+    )
+
+
+def _exists_in_pricing(pricing_body: dict | str | None, technology: str, material: str) -> bool:
+    if not isinstance(pricing_body, dict):
+        return False
+
+    tech_map = pricing_body.get(technology)
+    if not isinstance(tech_map, dict):
+        return False
+
+    lowered = {str(key).lower(): key for key in tech_map.keys()}
+    return material.lower() in lowered
+
+
+def _get_price(pricing_body: dict | str | None, technology: str, material: str) -> float | None:
+    if not isinstance(pricing_body, dict):
+        return None
+
+    tech_map = pricing_body.get(technology)
+    if not isinstance(tech_map, dict):
+        return None
+
+    for key, value in tech_map.items():
+        if str(key).lower() == material.lower():
+            try:
+                return float(value)
+            except Exception:
+                return None
+
+    return None
+
+
+def run_cycle_for_technology(base_url: str, technology: str, base_material: str, create_price: int, update_price: int, api_keys: list[str]) -> list[StepResult]:
+    results: list[StepResult] = []
+    suffix = f"{int(time.time())}_{secrets.token_hex(3)}"
+    material = f"{base_material}_{suffix}"
+
+    create_endpoint = f"/pricing/{technology}"
+    patch_endpoint = f"/pricing/{technology}/{material}"
+
+    # 1) create
+    status, body = _authorized_request_with_fallback(base_url, "POST", create_endpoint, {"material": material, "price": create_price}, api_keys)
+    ok = status == 201 and isinstance(body, dict) and bool(body.get("success"))
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="create",
+        method="POST",
+        endpoint=create_endpoint,
+        expected_status=201,
+        actual_status=status,
+        ok=ok,
+        details="Create new material",
+        body=body,
+    )
+
+    # 2) verify create with GET
+    status, body = _curl_request(base_url, "GET", "/pricing")
+    exists_after_create = status == 200 and _exists_in_pricing(body, technology, material)
+    created_price = _get_price(body, technology, material)
+    ok = exists_after_create and created_price == float(create_price)
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="verify_create",
+        method="GET",
+        endpoint="/pricing",
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details=f"Material exists with price={create_price}",
+        body=body,
+    )
+
+    # 3) patch/update
+    status, body = _authorized_request_with_fallback(base_url, "PATCH", patch_endpoint, {"price": update_price}, api_keys)
+    ok = status == 200 and isinstance(body, dict) and bool(body.get("success"))
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="update",
+        method="PATCH",
+        endpoint=patch_endpoint,
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details=f"Update material price to {update_price}",
+        body=body,
+    )
+
+    # 4) verify update with GET
+    status, body = _curl_request(base_url, "GET", "/pricing")
+    updated_price = _get_price(body, technology, material)
+    ok = status == 200 and updated_price == float(update_price)
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="verify_update",
+        method="GET",
+        endpoint="/pricing",
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details=f"Material price changed to {update_price}",
+        body=body,
+    )
+
+    # 5) delete
+    status, body = _authorized_request_with_fallback(base_url, "DELETE", patch_endpoint, None, api_keys)
+    ok = status == 200 and isinstance(body, dict) and bool(body.get("success"))
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="delete",
+        method="DELETE",
+        endpoint=patch_endpoint,
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details="Delete created material",
+        body=body,
+    )
+
+    # 6) verify deletion with GET
+    status, body = _curl_request(base_url, "GET", "/pricing")
+    still_exists = _exists_in_pricing(body, technology, material)
+    ok = status == 200 and not still_exists
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step="verify_delete",
+        method="GET",
+        endpoint="/pricing",
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details="Material removed from pricing map",
+        body=body,
+    )
+
+    return results
+
+
+def _write_reports(base_url: str, results: list[StepResult]) -> tuple[Path, Path]:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    generated_at = datetime.now(timezone.utc).isoformat()
+    success_count = sum(1 for item in results if item.success)
+    fail_count = len(results) - success_count
+
+    payload = {
+        "generated_at": generated_at,
+        "base_url": base_url,
+        "total_steps": len(results),
+        "success_count": success_count,
+        "failed_count": fail_count,
+        "results": [asdict(item) for item in results],
+    }
+
+    json_path = RESULTS_DIR / "pricing_cycle_test_report.json"
+    md_path = RESULTS_DIR / "pricing_cycle_test_report.md"
+
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    lines = [
+        "# Pricing Cycle Test Report",
+        "",
+        f"Generated at (UTC): **{generated_at}**",
+        f"Base URL: **{base_url}**",
+        f"Total steps: **{len(results)}**",
+        f"Success: **{success_count}**",
+        f"Failed: **{fail_count}**",
+        "",
+        "| # | Tech | Material | Step | Method | Endpoint | Exp | Got | Success |",
+        "|---:|:-----:|:---------|:------|:------:|:---------|---:|---:|:-------:|",
+    ]
+
+    for idx, item in enumerate(results, start=1):
+        lines.append(
+            f"| {idx} | {item.technology} | `{item.material}` | {item.step} | {item.method} | `{item.endpoint}` | {item.expected_status} | {item.http_status} | {'✅' if item.success else '❌'} |"
+        )
+
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return json_path, md_path
+
+
+def main() -> int:
+    base_url = resolve_base_url(PROJECT_ROOT)
+
+    try:
+        api_keys = _read_admin_api_key_candidates()
+    except Exception as exc:
+        print(f"[PRICING TEST] ERROR: {exc}")
+        return 1
+
+    print("[PRICING TEST] Running pricing lifecycle test for FDM and SLA...")
+
+    results: list[StepResult] = []
+    results.extend(run_cycle_for_technology(base_url, "FDM", "COPILOT_FDM", 1111, 1222, api_keys))
+    results.extend(run_cycle_for_technology(base_url, "SLA", "COPILOT_SLA", 2111, 2333, api_keys))
+
+    json_path, md_path = _write_reports(base_url, results)
+
+    failed = [item for item in results if not item.success]
+    print(f"[PRICING TEST] Completed. total={len(results)} failed={len(failed)}")
+    print(f"[PRICING TEST] JSON report: {json_path}")
+    print(f"[PRICING TEST] MD report:   {md_path}")
+    if failed:
+        print(f"[PRICING TEST] DEBUG base_url={base_url} tried_keys={len(api_keys)}")
+
+    if failed:
+        for item in failed:
+            print(
+                f"[PRICING TEST] FAIL {item.technology} {item.step} {item.endpoint} "
+                f"expected={item.expected_status} got={item.http_status}"
+            )
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

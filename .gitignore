@@ -12,6 +12,7 @@ venv/
 .env
 .env.*
 *.env
+!.env.example
 
 # IDE / OS artifacts
 .vscode/

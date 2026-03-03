@@ -13,7 +13,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '2.3.0',
+            version: '3.0.0',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -253,11 +253,60 @@ function createSwaggerDocument(pricing) {
                 }
             }
         },
-        '/slice/FDM': {
+        '/prusa/slice': {
             post: {
                 tags: ['Slicing'],
-                summary: 'FDM-only slicing endpoint.',
-                description: 'Processes upload strictly as FDM. No technology auto-detection.',
+                summary: 'PrusaSlicer endpoint (FDM/SLA auto mode by layer height).',
+                description: 'Uses PrusaSlicer. Automatically chooses technology by layer height: SLA for 0.025/0.05, FDM for 0.1/0.2/0.3. Material must belong to the selected technology, otherwise request fails with 4xx.',
+                consumes: ['multipart/form-data'],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'multipart/form-data': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    choosenFile: {
+                                        type: 'string',
+                                        format: 'binary',
+                                        description: 'The file to slice and to estimate price!'
+                                    },
+                                    layerHeight: {
+                                        type: 'string',
+                                        enum: ['0.025', '0.05', '0.1', '0.2', '0.3'],
+                                        default: '0.2',
+                                        description: 'Allowed layer heights. Determines FDM or SLA technology for PrusaSlicer.'
+                                    },
+                                    material: {
+                                        type: 'string',
+                                        default: 'PLA',
+                                        description: 'Material key for selected technology (FDM or SLA). Invalid cross-technology pairing returns 4xx.' 
+                                    },
+                                    infill: {
+                                        type: 'integer',
+                                        default: 20,
+                                        minimum: 0,
+                                        maximum: 100,
+                                        description: 'Infill percentage from `0` to `100` (used for FDM).' 
+                                    }
+                                },
+                                required: ['choosenFile', 'layerHeight', 'material']
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: 'Slicing successful' },
+                    400: { description: 'Bad Request' },
+                    500: { description: 'Server Error' }
+                }
+            }
+        },
+        '/orca/slice': {
+            post: {
+                tags: ['Slicing'],
+                summary: 'OrcaSlicer endpoint (FDM-only).',
+                description: 'Uses OrcaSlicer and always processes as FDM, including pricing. Includes --arrange 1 and --orient 1 for automatic layout. SLA materials are rejected with 4xx.',
                 consumes: ['multipart/form-data'],
                 requestBody: {
                     required: true,
@@ -275,7 +324,7 @@ function createSwaggerDocument(pricing) {
                                         type: 'string',
                                         enum: ['0.1', '0.2', '0.3'],
                                         default: '0.2',
-                                        description: 'Allowed FDM layer heights only.'
+                                        description: 'Requested FDM layer height profile for OrcaSlicer.'
                                     },
                                     material: {
                                         type: 'string',
@@ -288,48 +337,6 @@ function createSwaggerDocument(pricing) {
                                         minimum: 0,
                                         maximum: 100,
                                         description: 'Infill percentage from `0` to `100`.'
-                                    }
-                                },
-                                required: ['choosenFile', 'layerHeight', 'material']
-                            }
-                        }
-                    }
-                },
-                responses: {
-                    200: { description: 'Slicing successful' },
-                    400: { description: 'Bad Request' },
-                    500: { description: 'Server Error' }
-                }
-            }
-        },
-        '/slice/SLA': {
-            post: {
-                tags: ['Slicing'],
-                summary: 'SLA-only slicing endpoint.',
-                description: 'Processes upload strictly as SLA. No technology auto-detection.',
-                consumes: ['multipart/form-data'],
-                requestBody: {
-                    required: true,
-                    content: {
-                        'multipart/form-data': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    choosenFile: {
-                                        type: 'string',
-                                        format: 'binary',
-                                        description: 'The file to slice and to estimate price!'
-                                    },
-                                    layerHeight: {
-                                        type: 'string',
-                                        enum: ['0.025', '0.05'],
-                                        default: '0.05',
-                                        description: 'Allowed SLA layer heights only.'
-                                    },
-                                    material: {
-                                        type: 'string',
-                                        default: 'Standard',
-                                        description: 'SLA material key.'
                                     }
                                 },
                                 required: ['choosenFile', 'layerHeight', 'material']

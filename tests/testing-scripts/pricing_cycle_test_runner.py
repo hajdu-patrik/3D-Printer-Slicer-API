@@ -14,16 +14,21 @@ Auth:
 
 from __future__ import annotations
 
-import json
 import secrets
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 TESTS_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = TESTS_ROOT.parent.parent
 RESULTS_DIR = TESTS_ROOT / "results"
+PRICING_ENDPOINT = "/pricing"
+REPORT_PATH = RESULTS_DIR / "pricing_cycle_test_result.md"
+LEGACY_REPORT_FILES = (
+    RESULTS_DIR / "pricing_cycle_test_report.json",
+    RESULTS_DIR / "pricing_cycle_test_report.md",
+)
 from common.env_utils import resolve_admin_key_candidates, resolve_base_url
 from common.http_utils import curl_json
 
@@ -141,7 +146,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
     )
 
     # 2) verify create with GET
-    status, body = _curl_request(base_url, "GET", "/pricing")
+    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
     exists_after_create = status == 200 and _exists_in_pricing(body, technology, material)
     created_price = _get_price(body, technology, material)
     ok = exists_after_create and created_price == float(create_price)
@@ -151,7 +156,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
         material=material,
         step="verify_create",
         method="GET",
-        endpoint="/pricing",
+        endpoint=PRICING_ENDPOINT,
         expected_status=200,
         actual_status=status,
         ok=ok,
@@ -177,7 +182,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
     )
 
     # 4) verify update with GET
-    status, body = _curl_request(base_url, "GET", "/pricing")
+    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
     updated_price = _get_price(body, technology, material)
     ok = status == 200 and updated_price == float(update_price)
     _record(
@@ -186,7 +191,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
         material=material,
         step="verify_update",
         method="GET",
-        endpoint="/pricing",
+        endpoint=PRICING_ENDPOINT,
         expected_status=200,
         actual_status=status,
         ok=ok,
@@ -212,7 +217,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
     )
 
     # 6) verify deletion with GET
-    status, body = _curl_request(base_url, "GET", "/pricing")
+    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
     still_exists = _exists_in_pricing(body, technology, material)
     ok = status == 200 and not still_exists
     _record(
@@ -221,7 +226,7 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
         material=material,
         step="verify_delete",
         method="GET",
-        endpoint="/pricing",
+        endpoint=PRICING_ENDPOINT,
         expected_status=200,
         actual_status=status,
         ok=ok,
@@ -232,26 +237,16 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
     return results
 
 
-def _write_reports(base_url: str, results: list[StepResult]) -> tuple[Path, Path]:
+def _write_report(base_url: str, results: list[StepResult]) -> Path:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for legacy_path in LEGACY_REPORT_FILES:
+        if legacy_path.exists():
+            legacy_path.unlink()
 
     generated_at = datetime.now(timezone.utc).isoformat()
     success_count = sum(1 for item in results if item.success)
     fail_count = len(results) - success_count
-
-    payload = {
-        "generated_at": generated_at,
-        "base_url": base_url,
-        "total_steps": len(results),
-        "success_count": success_count,
-        "failed_count": fail_count,
-        "results": [asdict(item) for item in results],
-    }
-
-    json_path = RESULTS_DIR / "pricing_cycle_test_report.json"
-    md_path = RESULTS_DIR / "pricing_cycle_test_report.md"
-
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = [
         "# Pricing Cycle Test Report",
@@ -271,8 +266,8 @@ def _write_reports(base_url: str, results: list[StepResult]) -> tuple[Path, Path
             f"| {idx} | {item.technology} | `{item.material}` | {item.step} | {item.method} | `{item.endpoint}` | {item.expected_status} | {item.http_status} | {'✅' if item.success else '❌'} |"
         )
 
-    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return json_path, md_path
+    REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return REPORT_PATH
 
 
 def main() -> int:
@@ -290,12 +285,11 @@ def main() -> int:
     results.extend(run_cycle_for_technology(base_url, "FDM", "COPILOT_FDM", 1111, 1222, api_keys))
     results.extend(run_cycle_for_technology(base_url, "SLA", "COPILOT_SLA", 2111, 2333, api_keys))
 
-    json_path, md_path = _write_reports(base_url, results)
+    report_path = _write_report(base_url, results)
 
     failed = [item for item in results if not item.success]
     print(f"[PRICING TEST] Completed. total={len(results)} failed={len(failed)}")
-    print(f"[PRICING TEST] JSON report: {json_path}")
-    print(f"[PRICING TEST] MD report:   {md_path}")
+    print(f"[PRICING TEST] Report: {report_path}")
     if failed:
         print(f"[PRICING TEST] DEBUG base_url={base_url} tried_keys={len(api_keys)}")
 

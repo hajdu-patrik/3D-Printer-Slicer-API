@@ -2,6 +2,8 @@
  * Lightweight in-memory IP rate limiter.
  */
 
+const { DEFAULTS } = require('../config/constants');
+
 /**
  * Parse positive integer values from environment or user input with fallback.
  * @param {string | number | undefined} value Raw input value.
@@ -60,8 +62,14 @@ function createIpRateLimiter({ windowMs, maxRequests }) {
     };
 }
 
-const SLICE_RATE_LIMIT_WINDOW_MS = parsePositiveInt(process.env.SLICE_RATE_LIMIT_WINDOW_MS, 60_000);
-const SLICE_RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(process.env.SLICE_RATE_LIMIT_MAX_REQUESTS, 3);
+const SLICE_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+    process.env.SLICE_RATE_LIMIT_WINDOW_MS,
+    DEFAULTS.SLICE_RATE_LIMIT_WINDOW_MS
+);
+const SLICE_RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(
+    process.env.SLICE_RATE_LIMIT_MAX_REQUESTS,
+    DEFAULTS.SLICE_RATE_LIMIT_MAX_REQUESTS
+);
 
 /**
  * IP-based limiter used on slicing endpoints to reduce brute-force and flood traffic.

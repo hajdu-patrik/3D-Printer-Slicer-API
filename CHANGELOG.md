@@ -2,6 +2,51 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.0 (2026-03-03)
+
+### Added
+
+- Added dedicated dual-slicer public endpoints:
+  - `POST /prusa/slice`
+  - `POST /orca/slice`
+- Added Orca runtime profile support with separated machine/process configs:
+  - `configs/orca/Bambu_P1S_0.4_nozzle.json`
+  - `configs/orca/FDM_0.1mm.json`
+  - `configs/orca/FDM_0.2mm.json`
+  - `configs/orca/FDM_0.3mm.json`
+- Refactored deployment channel:
+  - `Dockerfile` (Ubuntu 24.04 base)
+  - `docker-compose.yml` (side-by-side rollout porting)
+
+### Changed
+
+- Updated slicing architecture from legacy fixed-technology routes to engine-based routing:
+  - removed old client contract dependence on `POST /slice/FDM` and `POST /slice/SLA`
+  - introduced engine-aware processing (`prusa` / `orca`)
+- Updated layer-height validation policy:
+  - Prusa endpoint allows `0.025`, `0.05`, `0.1`, `0.2`, `0.3`
+  - Orca endpoint allows `0.1`, `0.2`, `0.3`
+- Added material-to-technology guardrails for all slice requests:
+  - invalid pairings now return explicit mismatch validation errors
+- Updated response payload contract for slicing success:
+  - includes `slicer_engine` in response
+- Reworked runtime path model for slicer configs:
+  - Prusa profiles moved under `configs/prusa/`
+  - Orca profiles under `configs/orca/`
+
+### Validation
+
+- Verified next-channel runtime with full regression suite:
+  - full API matrix runner
+  - queue concurrency runner
+  - pricing lifecycle runner
+  - admin output-files runner
+
+### Documentation
+
+- Refreshed README endpoint documentation to the new API behavior (`/prusa/slice`, `/orca/slice`).
+- Updated badges to include OrcaSlicer and next Ubuntu channel visibility.
+
 ## v2.3.0 (2026-02-26)
 
 ### Changed

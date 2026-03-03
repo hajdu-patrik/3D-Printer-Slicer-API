@@ -4,16 +4,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { PRICING_FILE } = require('../config/paths');
-
-/**
- * Default fallback pricing matrix in HUF/hour.
- * @type {{FDM: Record<string, number>, SLA: Record<string, number>}}
- */
-const DEFAULT_PRICING = {
-    FDM: { PLA: 800, ABS: 800, PETG: 900, TPU: 900 },
-    SLA: { Standard: 1800, 'ABS-Like': 1800, Flexible: 2400 }
-};
+const { PRICING_FILE, LEGACY_PRICING_FILE } = require('../config/paths');
+const { DEFAULT_PRICING } = require('../config/constants');
 
 let pricing = structuredClone(DEFAULT_PRICING);
 let activePricingFile = PRICING_FILE;
@@ -39,7 +31,11 @@ function writePricingFile(filePath) {
 }
 
 function getExistingCandidates() {
-    const candidates = [PRICING_FILE].filter((filePath) => fs.existsSync(filePath));
+    const primaryExists = fs.existsSync(PRICING_FILE);
+    const candidates = primaryExists
+        ? [PRICING_FILE]
+        : [PRICING_FILE, LEGACY_PRICING_FILE].filter((filePath) => fs.existsSync(filePath));
+
     return candidates.sort((a, b) => {
         const aTime = fs.statSync(a).mtimeMs;
         const bTime = fs.statSync(b).mtimeMs;
@@ -52,8 +48,7 @@ function getExistingCandidates() {
  * @returns {boolean} True when save succeeds, otherwise false.
  */
 function savePricingToDisk() {
-    const writeTargets = [activePricingFile, PRICING_FILE]
-        .filter((value, index, arr) => arr.indexOf(value) === index);
+    const writeTargets = [PRICING_FILE];
 
     for (const targetFile of writeTargets) {
         try {
@@ -89,7 +84,10 @@ function loadPricingFromDisk() {
     for (const candidateFile of existingCandidates) {
         try {
             pricing = readPricingFile(candidateFile);
-            activePricingFile = candidateFile;
+            activePricingFile = PRICING_FILE;
+            if (candidateFile !== PRICING_FILE) {
+                savePricingToDisk();
+            }
             return;
         } catch (err) {
             console.warn(`[PRICING UPDATE] Failed to read ${candidateFile}. Reason: ${err.message}`);
@@ -137,6 +135,40 @@ function normalizeMaterialToken(value) {
 function findMaterialKey(technology, materialParam) {
     const requested = normalizeMaterialToken(materialParam);
     return Object.keys(pricing[technology] || {}).find((key) => normalizeMaterialToken(key) === requested) || null;
+}
+
+/**
+ * Resolve where a material exists across technology maps.
+ * @param {string} materialParam Material name.
+ * @returns {'FDM' | 'SLA' | 'BOTH' | null} Resolved technology scope.
+ */
+function resolveMaterialTechnology(materialParam) {
+    const inFdm = Boolean(findMaterialKey('FDM', materialParam));
+    const inSla = Boolean(findMaterialKey('SLA', materialParam));
+
+    if (inFdm && inSla) return 'BOTH';
+    if (inFdm) return 'FDM';
+    if (inSla) return 'SLA';
+    return null;
+}
+
+/**
+ * Check whether a material exists under selected technology.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @param {string} materialParam Material name.
+ * @returns {boolean} True when material is configured for the selected technology.
+ */
+function isMaterialValidForTechnology(technology, materialParam) {
+    return Boolean(findMaterialKey(technology, materialParam));
+}
+
+/**
+ * Return currently configured material keys for selected technology.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @returns {string[]} Material key list.
+ */
+function getAllowedMaterialsForTechnology(technology) {
+    return Object.keys(pricing[technology] || {});
 }
 
 /**
@@ -192,6 +224,9 @@ module.exports = {
     normalizeTechnology,
     normalizeMaterialToken,
     findMaterialKey,
+    resolveMaterialTechnology,
+    isMaterialValidForTechnology,
+    getAllowedMaterialsForTechnology,
     updateMaterialPrice,
     removeMaterial,
     getRate

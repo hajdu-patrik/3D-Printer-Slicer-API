@@ -2,123 +2,142 @@
 
 ![Node.js](https://img.shields.io/badge/Node.js-18.19.1-339933?style=flat&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Backend-Express_4.22.1-000000?style=flat&logo=express&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.12.3-3776AB?style=flat&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
 ![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.1-orange?style=flat)
+![OrcaSlicer](https://img.shields.io/badge/Slicer-OrcaSlicer_2.3.1-8A2BE2?style=flat)
 ![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
-![Swagger](https://img.shields.io/badge/API_Docs-swagger--ui--express_5.0.1-85EA2D?style=flat&logo=swagger&logoColor=black)
-![Deployment](https://img.shields.io/badge/Deployment-VPS_24%2F7-4CAF50?style=flat&logo=linux&logoColor=white)
-![Status](https://img.shields.io/badge/Status-Live_Production-success?style=flat)
-
+![Ubuntu Next](https://img.shields.io/badge/Next-Ubuntu_24.04-E95420?style=flat&logo=ubuntu&logoColor=white)
+![API](https://img.shields.io/badge/API-Prusa%2FOrca_Endpoints-success?style=flat)
 
 # 3D Printer Slicer API (FDM & SLA)
 
-An automated 3D slicing and pricing API built with `Node.js` and `Python` that seamlessly converts various 2D and 3D file formats into ready-to-print models using the PrusaSlicer engine. It provides automated part orientation, intelligent slicing, and dynamic cost estimation for both **FDM** and **SLA** printing technologies.
+An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts multiple 2D/3D input types into printable outputs with validated pricing.
 
-Built for **Zero-Downtime deployment**, this API is designed to serve as the backend engine for **automated 3D printing hubs**, quoting systems, and e-commerce manufacturing platforms.
+Built for zero-downtime rollout, this API now supports two slicer engines through separate public endpoints.
 
 ---
 
-## ✨ Enterprise-Grade Features
-- 🔄 **Universal File Conversion:** Automatically handles standard 3D meshes, CAD assemblies, vector graphics (extruding 2D to 3D), and image lithophanes.
+## ✨ Core Features
 
-- ⚖️ **Algorithmic Auto-Orientation:** Utilizes Python-based physical simulations (`Trimesh` & `Gmsh`) to calculate the most stable printing pose, minimizing Z-height and print time.
-
-- 💰 **Dynamic Pricing Engine:** Extracts exact material usage and estimated print times from G-code/SL1 files to generate precise cost estimations based on customizable hourly rates.
-
-- 🛡️ **Robust Pre-Flight Checks:** Validates request structure and processing constraints before CPU-intensive slicing starts.
-
-- 🚦 **Abuse Protection:** Per-IP rate limiting and bounded in-memory slicing queue protect CPU/RAM from request floods.
-
-- 🧨 **ZIP Bomb Guard:** ZIP uploads are validated before extraction (entry-count, uncompressed-size, path traversal, encrypted ZIP rejection).
-
-- 📦 **Automated Resource Management:** Self-cleaning infrastructure with ZIP archive extraction and scheduled `.gcode` / `.sl1` file purging.
+- 🔄 **Universal input processing:** direct 3D, CAD, vector, image, and ZIP first-supported extraction.
+- ⚖️ **Auto-orientation:** Python-based orientation optimization before slicing.
+- 🧮 **Pricing engine:** dynamic hourly-rate calculation from persisted pricing map.
+- 🚦 **Queue + rate protection:** bounded queue and endpoint rate limiting for CPU-heavy requests.
+- 🧨 **ZIP safety checks:** entry/size/path validation and encrypted ZIP rejection.
+- 🧵 **Dual slicer routing:** Prusa and Orca engines behind dedicated endpoints.
 
 ---
 
 ## 📂 Supported File Formats
 
-The API accepts single files or `.zip` archives containing any of the following formats:
-
-| Category        | Extensions                          | Processing Method |
-|----------------|--------------------------------------|-------------------|
-| **Direct 3D**  | `.stl`, `.obj`, `.3mf`               | Scene merging & manifold validation. |
-| **NURBS / CAD**| `.stp`, `.step`, `.igs`, `.iges`     | Converted via Gmsh and meshed as-is (invalid geometry is rejected). |
-| **Vector**     | `.dxf`, `.svg`, `.eps`, `.pdf`       | Polygon extraction and parameterized Z-extrusion (open/invalid geometry is rejected, no auto-fix). |
-| **Image**      | `.jpg`, `.jpeg`, `.png`, `.bmp`      | Grayscale heightmap generation (Lithophane style); invalid/non-image source files are rejected (no auto-fix). |
+| Category | Extensions |
+|---|---|
+| Direct 3D | `.stl`, `.obj`, `.3mf`, `.ply` |
+| NURBS / CAD | `.stp`, `.step`, `.igs`, `.iges`, `.ply` |
+| Vector | `.dxf`, `.svg`, `.eps`, `.pdf` |
+| Image | `.jpg`, `.jpeg`, `.png`, `.bmp` |
+| Archive | `.zip` |
 
 ---
 
-## 🧠 Learn how to use the API
+## 🔑 Authentication
 
-Pricing is now **persistent** and loaded from `configs/pricing.json` at startup.
+Admin-protected endpoints require:
 
-If `configs/pricing.json` does not exist, the API auto-creates it with default FDM/SLA pricing.
+- Header: `x-api-key: <ADMIN_API_KEY>`
 
-All API examples and payloads below are production-compatible with the current backend behavior.
+Public endpoints do not require admin key.
 
-### Pricing Management Endpoint (Public)
+---
 
+## 🌐 Endpoints
+
+### Public
+
+- `GET /health`
 - `GET /pricing`
-  - Returns full pricing object.
+- `POST /prusa/slice`
+- `POST /orca/slice`
 
-### Pricing Management Endpoints (Admin-Protected)
+### Admin-protected
 
-> Material identifiers are matched case-insensitively (`PLA`, `pla`, `pLa` are treated as the same material key).
+- `POST /pricing/FDM`
+- `POST /pricing/SLA`
+- `PATCH /pricing/:technology/:material`
+- `DELETE /pricing/:technology/:material`
+- `GET /admin/output-files`
 
-#### `POST /pricing/FDM`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Body: `{ "material": "ASA", "price": 1200 }`
-  - Creates a new FDM material.
+---
 
-#### `POST /pricing/SLA`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Body: `{ "material": "High-Temp", "price": 2600 }`
-  - Creates a new SLA material.
+## 🧠 Slicing API Behavior
 
-#### `PATCH /pricing/FDM/:material`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Body: `{ "price": 950 }`
-  - Updates an existing FDM material price.
-  - Returns `400` if the material does not exist.
+Both slicing endpoints accept `multipart/form-data` with required file field:
 
-#### `PATCH /pricing/SLA/:material`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Body: `{ "price": 1800 }`
-  - Updates an existing SLA material price.
-  - Returns `400` if the material does not exist.
+- `choosenFile`
 
-#### `DELETE /pricing/FDM/:material`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Deletes FDM material pricing entry.
+Optional fields:
 
-#### `DELETE /pricing/SLA/:material`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Deletes SLA material pricing entry.
+- `layerHeight`
+- `material`
+- `infill` (`0`-`100`)
+- `depth`
 
+### `POST /prusa/slice`
 
-### Slicing Endpoints (Public)
+Uses `prusa-slicer`.
 
-#### `POST /slice/FDM`
-Generate an FDM slicing profile and price estimate by uploading one supported input file (`direct`, `CAD`, `vector`, `image`, or `.zip`).
+- Auto-selects technology by `layerHeight`:
+  - `0.025`, `0.05` → `SLA`
+  - `0.1`, `0.2`, `0.3` → `FDM`
+- Rejects invalid `layerHeight` values outside `0.025, 0.05, 0.1, 0.2, 0.3`
+- Validates material/technology compatibility
+
+Example:
 
 ```bash
-curl -X POST http://localhost:3000/slice/FDM \
+curl -X POST http://localhost:3000/prusa/slice \
   -H "Accept: application/json" \
-  -F "choosenFile=@/path/to/your/model.stl" \
+  -F "choosenFile=@/path/to/model.stl" \
   -F "layerHeight=0.2" \
   -F "material=PLA" \
   -F "infill=20"
 ```
 
-**JSON Response:**
+### `POST /orca/slice`
+
+Uses `orca-slicer`.
+
+- Forced `FDM` processing
+- Allowed `layerHeight`: `0.1`, `0.2`, `0.3`
+- Rejects SLA-only materials
+- Runs with Orca arrange/orient flow and machine+process profile pair
+  - Machine profile file is resolved from `.env` via `ORCA_MACHINE_PROFILE` (default: `Bambu_P1S_0.4_nozzle.json`)
+- Process profile file is selected by `layerHeight` (`0.1/0.2/0.3`) and can be overridden via `.env`:
+  - `ORCA_PROCESS_PROFILE_0_1`
+  - `ORCA_PROCESS_PROFILE_0_2`
+  - `ORCA_PROCESS_PROFILE_0_3`
+
+Example:
+
+```bash
+curl -X POST http://localhost:3000/orca/slice \
+  -H "Accept: application/json" \
+  -F "choosenFile=@/path/to/model.stl" \
+  -F "layerHeight=0.2" \
+  -F "material=PLA" \
+  -F "infill=20"
+```
+
+### Common successful response
 
 ```json
 {
   "success": true,
+  "slicer_engine": "prusa",
   "technology": "FDM",
-  "material": "PETG",
+  "material": "PLA",
   "infill": "20%",
-  "hourly_rate": 900,
+  "hourly_rate": 800,
   "stats": {
     "print_time_seconds": 5400,
     "print_time_readable": "1h 30m",
@@ -129,54 +148,81 @@ curl -X POST http://localhost:3000/slice/FDM \
 }
 ```
 
-#### `POST /slice/SLA`
-Generate an SLA slicing profile and price estimate by uploading one supported input file.
+### Common slicing error codes
 
-```bash
-curl -X POST http://localhost:3000/slice/SLA \
-  -H "Accept: application/json" \
-  -F "choosenFile=@/path/to/your/model.stl" \
-  -F "layerHeight=0.05" \
-  -F "material=Standard"
-```
+- `INVALID_LAYER_HEIGHT`
+- `INVALID_LAYER_HEIGHT_FOR_ENGINE`
+- `INVALID_LAYER_HEIGHT_FOR_TECHNOLOGY`
+- `INVALID_MATERIAL_FOR_TECHNOLOGY`
+- `MATERIAL_TECHNOLOGY_MISMATCH`
+- `INVALID_SOURCE_ARCHIVE`
+- `INVALID_SOURCE_GEOMETRY`
+- `ORCA_PROFILE_INCOMPATIBLE`
+- `FILE_PROCESSING_TIMEOUT`
+- `SLICE_QUEUE_FULL`
+- `SLICE_QUEUE_TIMEOUT`
 
-**JSON Response:**
+---
+
+## 💰 Pricing API
+
+### `GET /pricing`
+
+Returns full pricing object.
+
+### `POST /pricing/FDM` / `POST /pricing/SLA` (admin)
+
+Create new material for selected technology.
 
 ```json
 {
-  "success": true,
-  "technology": "SLA",
-  "material": "Standard",
-  "infill": "20%",
-  "hourly_rate": 1800,
-  "stats": {
-    "print_time_seconds": 1990,
-    "print_time_readable": "0h 33m (Est.)",
-    "material_used_m": 0,
-    "object_height_mm": 8.5,
-    "estimated_price_huf": 1000
-  }
+  "material": "ASA",
+  "price": 1200
 }
 ```
 
-### Admin Operational Endpoints (Protected)
+### `PATCH /pricing/:technology/:material` (admin)
 
-#### `GET /admin/output-files`
-  - Header: `x-api-key: <ADMIN_API_KEY>`
-  - Lists generated artifacts currently present under the `output/` directory.
+Update existing material price only.
 
-**JSON Response:**
+```json
+{
+  "price": 950
+}
+```
+
+### `DELETE /pricing/:technology/:material` (admin)
+
+Delete existing material from selected technology.
+
+---
+
+## 🛠️ Admin Endpoint
+
+### `GET /admin/output-files` (admin)
+
+Lists generated `.gcode` / `.sl1` files from `output/`.
 
 ```json
 {
   "success": true,
-  "total": 2,
   "files": [
     {
-      "fileName": "Cactus-output-1772126605107.gcode",
-      "sizeBytes": 409600,
-      "createdAt": "2026-02-24T15:10:00.000Z",
-      "modifiedAt": "2026-02-24T15:10:01.000Z"
+      "filename": "model_20240915_153045.gcode",
+      "technology": "FDM",
+      "material": "PLA",
+      "layerHeight": 0.2,
+      "infill": 20,
+      "slicer_engine": "prusa",
+      "created_at": "2024-09-15T15:30:45Z"
+    },
+    {
+      "filename": "model_20240915_154200.sl1",
+      "technology": "SLA",
+      "material": "Resin_X",
+      "layerHeight": 0.05,
+      "slicer_engine": "orca",
+      "created_at": "2024-09-15T15:42:00Z"
     }
   ]
 }
@@ -254,9 +300,8 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - `tests/testing-scripts/` is intended to be public and versioned.
 - `tests/testing-files/` sample payloads are intentionally excluded from repository publication.
 - `tests/testing-scripts/results/` generated reports are runtime artifacts and are ignored.
-
 ---
 
 ## 📦 Release Log
 
-Detailed version history and retroactive tag notes are maintained in [`CHANGELOG.md`](https://github.com/hajdu-patrik/3D-Printer-Slicer-API/blob/main/CHANGELOG.md).
+Detailed version history is maintained in [`CHANGELOG.md`](CHANGELOG.md).

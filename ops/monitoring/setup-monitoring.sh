@@ -56,7 +56,7 @@ server {
   auth_basic_user_file ${HTPASSWD_FILE};
 
     location / {
-        proxy_pass http://127.0.0.1:3001;
+      proxy_pass http://127.0.0.1:3003;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -74,7 +74,7 @@ echo "[5/6] Requesting TLS certificate..."
 certbot --nginx -d "${MONITOR_DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email --redirect || true
 
 echo "[6/6] Verifying local monitor endpoint..."
-curl -fsS http://127.0.0.1:3001 >/dev/null
+curl -fsS http://127.0.0.1:3003 >/dev/null
 
 echo "Done. Monitoring is available at: https://${MONITOR_DOMAIN}"
 echo "Recommended next step: protect this domain with Cloudflare Access (Zero Trust)."

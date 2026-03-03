@@ -1,7 +1,9 @@
 services:
   slicer-api:
-    build: .
-    image: 3d-printer-slicer-api:v2.2.2
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: 3d-printer-slicer-api:v3.0.0
     container_name: 3d-printer-slicer-api-backend-server
     user: ${SLICER_CONTAINER_USER:-0:0}
     env_file:
@@ -9,7 +11,7 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://127.0.0.1:3000/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(5000,()=>{req.destroy();process.exit(1);});"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -27,23 +29,20 @@ services:
         max-size: "20m"
         max-file: "5"
     volumes:
-      # --- Runtime data ---
       - ./input:/app/input
       - ./output:/app/output
-      
-      # --- Configurations ---
       - ./configs:/app/configs
     restart: unless-stopped
     stop_grace_period: 30s
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    container_name: 3d-printer-slicer-api-uptime-kuma
+    container_name: 3d-printer-slicer-api-uptime-kuma-next
     profiles: ["monitoring"]
     ports:
-      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:3003:3001"
     volumes:
-      - uptime-kuma-data:/app/data
+      - uptime-kuma-data-next:/app/data
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -54,4 +53,4 @@ services:
         max-file: "3"
 
 volumes:
-  uptime-kuma-data:
+  uptime-kuma-data-next:

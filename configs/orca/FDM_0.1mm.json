@@ -1,0 +1,17 @@
+{
+    "type": "process",
+    "setting_id": "ORCA_FDM_01_LOCAL",
+    "name": "0.10mm Fine @MyMarlin",
+    "from": "user",
+    "instantiation": "true",
+    "inherits": "fdm_process_marlin_common",
+    "layer_height": "0.1",
+    "bottom_shell_layers": "3",
+    "top_shell_layers": "4",
+    "sparse_infill_density": "15%",
+    "enable_support": "1",
+    "support_type": "normal(auto)",
+    "compatible_printers": [
+        "MyMarlin 0.4 nozzle"
+    ]
+}

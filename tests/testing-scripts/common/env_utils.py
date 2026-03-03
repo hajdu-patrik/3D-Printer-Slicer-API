@@ -22,7 +22,7 @@ def read_dotenv(project_root: Path) -> dict[str, str]:
 
 def resolve_base_url(project_root: Path) -> str:
     dotenv = read_dotenv(project_root)
-    return dotenv.get("SLICER_BASE_URL") or os.getenv("SLICER_BASE_URL") or "http://127.0.0.1:3000"
+    return os.getenv("SLICER_BASE_URL") or dotenv.get("SLICER_BASE_URL") or "http://127.0.0.1:3000"
 
 
 def resolve_admin_keys(project_root: Path) -> tuple[str | None, str | None]:

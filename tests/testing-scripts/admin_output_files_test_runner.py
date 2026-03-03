@@ -8,13 +8,17 @@ Validates:
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_ROOT.parent.parent
 RESULTS_DIR = SCRIPT_ROOT / "results"
+REPORT_PATH = RESULTS_DIR / "admin_output_files_test_result.md"
+LEGACY_REPORT_FILES = (
+    RESULTS_DIR / "admin_output_files_test_report.json",
+    RESULTS_DIR / "admin_output_files_test_report.md",
+)
 from common.env_utils import resolve_admin_key_candidates, resolve_base_url
 from common.http_utils import curl_json
 
@@ -28,18 +32,11 @@ def read_admin_api_key_candidates() -> list[str]:
 
 def write_report(*, base_url: str, success: bool, details: dict) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    for legacy_path in LEGACY_REPORT_FILES:
+        if legacy_path.exists():
+            legacy_path.unlink()
+
     generated_at = datetime.now(timezone.utc).isoformat()
-
-    json_path = RESULTS_DIR / "admin_output_files_test_report.json"
-    md_path = RESULTS_DIR / "admin_output_files_test_report.md"
-
-    payload = {
-        "generated_at": generated_at,
-        "base_url": base_url,
-        "success": success,
-        "details": details,
-    }
-    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     lines = [
         "# Admin Output Files Test Report",
@@ -54,7 +51,7 @@ def write_report(*, base_url: str, success: bool, details: dict) -> None:
         f"- Authorized status: `{details.get('authorized_status')}`",
         f"- Total files: `{details.get('total_files')}`",
     ]
-    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:

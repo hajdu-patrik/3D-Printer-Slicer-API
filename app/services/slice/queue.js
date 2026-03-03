@@ -2,6 +2,8 @@
  * In-memory FIFO queue for bounded concurrent slicing jobs.
  */
 
+const { DEFAULTS } = require('../../config/constants');
+
 /**
  * Parse positive integer values with a safe fallback.
  * @param {string | number | undefined} value Source value.
@@ -13,9 +15,18 @@ function parsePositiveInt(value, fallback) {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const MAX_SLICE_QUEUE_LENGTH = parsePositiveInt(process.env.MAX_SLICE_QUEUE_LENGTH || '100', 100);
-const MAX_SLICE_QUEUE_WAIT_MS = parsePositiveInt(process.env.MAX_SLICE_QUEUE_WAIT_MS || '300000', 300000);
-const MAX_CONCURRENT_SLICES = parsePositiveInt(process.env.MAX_CONCURRENT_SLICES || '1', 1);
+const MAX_SLICE_QUEUE_LENGTH = parsePositiveInt(
+    process.env.MAX_SLICE_QUEUE_LENGTH || `${DEFAULTS.MAX_SLICE_QUEUE_LENGTH}`,
+    DEFAULTS.MAX_SLICE_QUEUE_LENGTH
+);
+const MAX_SLICE_QUEUE_WAIT_MS = parsePositiveInt(
+    process.env.MAX_SLICE_QUEUE_WAIT_MS || `${DEFAULTS.MAX_SLICE_QUEUE_WAIT_MS}`,
+    DEFAULTS.MAX_SLICE_QUEUE_WAIT_MS
+);
+const MAX_CONCURRENT_SLICES = parsePositiveInt(
+    process.env.MAX_CONCURRENT_SLICES || `${DEFAULTS.MAX_CONCURRENT_SLICES}`,
+    DEFAULTS.MAX_CONCURRENT_SLICES
+);
 
 const sliceQueue = [];
 let activeSliceJobs = 0;

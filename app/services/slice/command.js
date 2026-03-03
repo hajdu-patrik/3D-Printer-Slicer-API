@@ -3,10 +3,14 @@
  */
 
 const { exec } = require('node:child_process');
+const { DEFAULTS } = require('../../config/constants');
 
 const DEBUG_COMMAND_LOGS = process.env.DEBUG_COMMAND_LOGS === 'true';
-const MAX_LOG_OUTPUT = 4000;
-const COMMAND_TIMEOUT_MS = Number.parseInt(process.env.SLICE_COMMAND_TIMEOUT_MS || '600000', 10) || 600000;
+const MAX_LOG_OUTPUT = DEFAULTS.MAX_LOG_OUTPUT;
+const COMMAND_TIMEOUT_MS = Number.parseInt(
+    process.env.SLICE_COMMAND_TIMEOUT_MS || `${DEFAULTS.SLICE_COMMAND_TIMEOUT_MS}`,
+    10
+) || DEFAULTS.SLICE_COMMAND_TIMEOUT_MS;
 
 /**
  * Truncate command output for safe/compact logging.

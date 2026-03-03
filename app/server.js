@@ -11,7 +11,7 @@ const createSwaggerDocument = require('./docs/swagger-docs');
 const pricingRoutes = require('./routes/pricing.routes');
 const sliceRoutes = require('./routes/slice.routes');
 const systemRoutes = require('./routes/system.routes');
-const { PORT } = require('./config/constants');
+const { PORT, DEFAULTS } = require('./config/constants');
 const { OUTPUT_DIR, ensureRequiredDirectories } = require('./config/paths');
 const { loadPricingFromDisk, getPricing } = require('./services/pricing.service');
 
@@ -28,8 +28,8 @@ loadPricingFromDisk();
 /** @type {import('express').Express} */
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
-app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || '1mb' }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || DEFAULTS.JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || DEFAULTS.FORM_BODY_LIMIT }));
 
 // Serve static files (like generated STL files)
 app.use('/download', express.static(path.join(OUTPUT_DIR)));

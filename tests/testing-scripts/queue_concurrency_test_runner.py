@@ -1,4 +1,4 @@
-"""Concurrent queue behavior test runner for /slice endpoints.
+"""Concurrent queue behavior test runner for slicing endpoints.
 
 Goal:
 - Fire multiple POST requests at the same time.
@@ -12,10 +12,9 @@ Notes:
 from __future__ import annotations
 
 import argparse
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -26,6 +25,11 @@ SCRIPTS_ROOT = Path(__file__).resolve().parent
 TESTS_ROOT = SCRIPTS_ROOT.parent / "testing-files"
 PROJECT_ROOT = SCRIPTS_ROOT.parent.parent
 RESULTS_DIR = SCRIPTS_ROOT / "results"
+REPORT_PATH = RESULTS_DIR / "queue_concurrency_test_result.md"
+LEGACY_REPORT_FILES = (
+    RESULTS_DIR / "queue_concurrency_test_report.json",
+    RESULTS_DIR / "queue_concurrency_test_report.md",
+)
 SUPPORTED_EXTENSIONS = {
     ".zip", ".stl", ".obj", ".3mf", ".ply",
     ".stp", ".step", ".igs", ".iges",
@@ -38,6 +42,10 @@ def resolve_runtime_env() -> tuple[str, str | None]:
     env_key, dotenv_key = resolve_admin_keys(PROJECT_ROOT)
     admin_api_key = dotenv_key or env_key
     return base_url, admin_api_key
+
+
+def resolve_engine_name(endpoint: str) -> str:
+    return "Orca" if endpoint == "/orca/slice" else "Prusa"
 
 
 @dataclass
@@ -230,6 +238,7 @@ def markdown_summary(results: Iterable[QueueRequestResult], generated_at: str, e
     total = len(rows)
     ok = sum(1 for r in rows if r.success)
     bad = total - ok
+    engine = resolve_engine_name(endpoint)
 
     lines = [
         "# Queue Concurrency Test Report",
@@ -237,19 +246,20 @@ def markdown_summary(results: Iterable[QueueRequestResult], generated_at: str, e
         f"Generated at (UTC): **{generated_at}**",
         f"Base URL: **{base_url}**",
         f"Endpoint: **{endpoint}**",
+        f"Slicer engine: **{engine}**",
         f"Total concurrent requests: **{total}**",
         f"Success: **{ok}**",
         f"Failed: **{bad}**",
         f"Arrival order kept: **{order_check.get('arrival_order_kept')}**",
         f"Staggered completion: **{order_check.get('staggered')}**",
         "",
-        "| # | File | Attempts | Status | Success | Duration(s) | ErrorCode |",
-        "|---:|:-----|---------:|------:|:-------:|-----------:|:---------|",
+        "| # | Engine | File | Attempts | Status | Success | Duration(s) | ErrorCode |",
+        "|---:|:------:|:-----|---------:|------:|:-------:|-----------:|:---------|",
     ]
 
     for r in rows:
         lines.append(
-            f"| {r.index} | `{r.file}` | {r.attempts} | {r.http_status} | {'✅' if r.success else '❌'} | {r.duration_sec} | {r.error_code or '-'} |"
+            f"| {r.index} | {engine} | `{r.file}` | {r.attempts} | {r.http_status} | {'✅' if r.success else '❌'} | {r.duration_sec} | {r.error_code or '-'} |"
         )
 
     return "\n".join(lines) + "\n"
@@ -257,7 +267,7 @@ def markdown_summary(results: Iterable[QueueRequestResult], generated_at: str, e
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--endpoint", default="/slice/FDM", choices=["/slice/FDM", "/slice/SLA"])
+    parser.add_argument("--endpoint", default="/prusa/slice", choices=["/prusa/slice", "/orca/slice"])
     parser.add_argument("--count", type=int, default=3, help="number of concurrent requests")
     parser.add_argument("--layer-height", type=float, default=0.2)
     parser.add_argument("--material", default="PLA")
@@ -270,6 +280,10 @@ def main() -> int:
         return 1
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    for legacy_path in LEGACY_REPORT_FILES:
+        if legacy_path.exists():
+            legacy_path.unlink()
+
     base_url, admin_api_key = resolve_runtime_env()
 
     try:
@@ -279,9 +293,9 @@ def main() -> int:
         return 1
 
     print(f"[QUEUE TEST] endpoint={args.endpoint} count={args.count} files={len(input_files)}")
+    print(f"[QUEUE TEST] engine={resolve_engine_name(args.endpoint)}")
     print(f"[QUEUE TEST] admin_api_key_found={bool(admin_api_key)}")
 
-    started_wall = time.perf_counter()
     results: list[QueueRequestResult] = []
 
     with ThreadPoolExecutor(max_workers=args.count) as executor:
@@ -306,8 +320,6 @@ def main() -> int:
                 f"[QUEUE TEST] req#{result.index} status={result.http_status} success={result.success} duration={result.duration_sec}s"
             )
 
-    ended_wall = time.perf_counter()
-
     results_sorted = sorted(results, key=lambda r: r.index)
     success_count = sum(1 for r in results_sorted if r.success)
     fail_count = len(results_sorted) - success_count
@@ -315,36 +327,13 @@ def main() -> int:
     order_check = evaluate_order(results_sorted)
 
     generated_at = datetime.now(timezone.utc).isoformat()
-    report = {
-        "generated_at": generated_at,
-        "base_url": base_url,
-        "endpoint": args.endpoint,
-        "count": args.count,
-        "input_files": [
-            str(path.relative_to(TESTS_ROOT)).replace("\\", "/") if TESTS_ROOT in path.parents else str(path)
-            for path in input_files
-        ],
-        "layer_height": args.layer_height,
-        "material": args.material,
-        "admin_api_key_found": bool(admin_api_key),
-        "wall_duration_sec": round(ended_wall - started_wall, 3),
-        "success_count": success_count,
-        "fail_count": fail_count,
-        "order_check": order_check,
-        "results": [asdict(r) for r in results_sorted],
-    }
-
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = RESULTS_DIR / "queue_concurrency_test_report.json"
-    report_md_path = RESULTS_DIR / "queue_concurrency_test_report.md"
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    report_md_path.write_text(
+    REPORT_PATH.write_text(
         markdown_summary(results_sorted, generated_at, args.endpoint, order_check, base_url),
         encoding="utf-8",
     )
 
-    print(f"[QUEUE TEST] Report: {report_path}")
-    print(f"[QUEUE TEST] Report: {report_md_path}")
+    print(f"[QUEUE TEST] Report: {REPORT_PATH}")
     print(f"[QUEUE TEST] Success={success_count} Fail={fail_count}")
     if order_check.get("arrival_order_kept") is not None:
         print(

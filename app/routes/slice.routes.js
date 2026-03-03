@@ -5,8 +5,9 @@
 const express = require('express');
 const multer = require('multer');
 const { HELP_FILES_DIR } = require('../config/paths');
+const { DEFAULTS } = require('../config/constants');
 const { sliceRateLimiter } = require('../middleware/rateLimit');
-const { handleSliceFDM, handleSliceSLA } = require('../services/slice.service');
+const { handleSlicePrusa, handleSliceOrca } = require('../services/slice.service');
 
 const router = express.Router();
 
@@ -15,8 +16,8 @@ const router = express.Router();
  * @returns {number} Maximum upload size in bytes.
  */
 function resolveMaxUploadBytes() {
-    const parsed = Number.parseInt(process.env.MAX_UPLOAD_BYTES || `${100 * 1024 * 1024}`, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 100 * 1024 * 1024;
+    const parsed = Number.parseInt(process.env.MAX_UPLOAD_BYTES || `${DEFAULTS.MAX_UPLOAD_BYTES}`, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULTS.MAX_UPLOAD_BYTES;
 }
 
 /**
@@ -29,14 +30,7 @@ const upload = multer({
     }
 });
 
-/**
- * FDM-only slice endpoint.
- */
-router.post('/slice/FDM', sliceRateLimiter, upload.any(), handleSliceFDM);
-
-/**
- * SLA-only slice endpoint.
- */
-router.post('/slice/SLA', sliceRateLimiter, upload.any(), handleSliceSLA);
+router.post('/prusa/slice', sliceRateLimiter, upload.any(), handleSlicePrusa);
+router.post('/orca/slice', sliceRateLimiter, upload.any(), handleSliceOrca);
 
 module.exports = router;

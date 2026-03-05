@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: 3d-printer-slicer-api:v3.0.0
+    image: 3d-printer-slicer-api:v3.0.1
     container_name: 3d-printer-slicer-api-backend-server
     user: ${SLICER_CONTAINER_USER:-0:0}
     env_file:
@@ -37,10 +37,10 @@ services:
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    container_name: 3d-printer-slicer-api-uptime-kuma-next
+    container_name: 3d-printer-slicer-api-uptime-kuma-monitoring
     profiles: ["monitoring"]
     ports:
-      - "127.0.0.1:3003:3001"
+      - "127.0.0.1:3001:3001"
     volumes:
       - uptime-kuma-data-next:/app/data
     restart: unless-stopped

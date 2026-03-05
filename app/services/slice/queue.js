@@ -3,17 +3,7 @@
  */
 
 const { DEFAULTS } = require('../../config/constants');
-
-/**
- * Parse positive integer values with a safe fallback.
- * @param {string | number | undefined} value Source value.
- * @param {number} fallback Fallback integer.
- * @returns {number} Positive integer result.
- */
-function parsePositiveInt(value, fallback) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+const { parsePositiveInt } = require('./number-utils');
 
 const MAX_SLICE_QUEUE_LENGTH = parsePositiveInt(
     process.env.MAX_SLICE_QUEUE_LENGTH || `${DEFAULTS.MAX_SLICE_QUEUE_LENGTH}`,

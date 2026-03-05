@@ -45,7 +45,11 @@ const swaggerUiOptions = {
     customCss: '.parameters-col_description .parameter__in { display: none !important; }'
 };
 
-// Helper function to set no-cache headers for API documentation endpoints
+/**
+ * Apply no-cache headers to documentation responses.
+ * @param {import('express').Response} res Express response instance.
+ * @returns {void}
+ */
 function setNoCacheHeaders(res) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');

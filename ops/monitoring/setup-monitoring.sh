@@ -9,7 +9,7 @@ fi
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <monitor-domain> [project-dir]"
   echo "Required env vars: MONITOR_BASIC_AUTH_USER, MONITOR_BASIC_AUTH_PASSWORD"
-  echo "Example: $0 monitor.3dslicer.api /home/deploy/3D-Printer-Slicer-API-for-FDM-and-SLA_JS"
+  echo "Example: $0 monitor.3dslicer.api /home/deploy/3D-Printer-Slicer-API"
   exit 1
 fi
 
@@ -56,7 +56,7 @@ server {
   auth_basic_user_file ${HTPASSWD_FILE};
 
     location / {
-      proxy_pass http://127.0.0.1:3003;
+      proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -74,7 +74,7 @@ echo "[5/6] Requesting TLS certificate..."
 certbot --nginx -d "${MONITOR_DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email --redirect || true
 
 echo "[6/6] Verifying local monitor endpoint..."
-curl -fsS http://127.0.0.1:3003 >/dev/null
+curl -fsS http://127.0.0.1:3001 >/dev/null
 
 echo "Done. Monitoring is available at: https://${MONITOR_DOMAIN}"
 echo "Recommended next step: protect this domain with Cloudflare Access (Zero Trust)."

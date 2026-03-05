@@ -30,6 +30,8 @@ LEGACY_REPORT_FILES = (
     RESULTS_DIR / "queue_concurrency_test_report.json",
     RESULTS_DIR / "queue_concurrency_test_report.md",
 )
+PRUSA_SLICE_ENDPOINT = "/prusa/slice"
+ORCA_SLICE_ENDPOINT = "/orca/slice"
 SUPPORTED_EXTENSIONS = {
     ".zip", ".stl", ".obj", ".3mf", ".ply",
     ".stp", ".step", ".igs", ".iges",
@@ -45,7 +47,33 @@ def resolve_runtime_env() -> tuple[str, str | None]:
 
 
 def resolve_engine_name(endpoint: str) -> str:
-    return "Orca" if endpoint == "/orca/slice" else "Prusa"
+    return "Orca" if endpoint == ORCA_SLICE_ENDPOINT else "Prusa"
+
+
+def format_layer_height_token(layer_height: float) -> str:
+    return f"{layer_height:.3f}".rstrip("0").rstrip(".")
+
+
+def build_extra_fields(endpoint: str, layer_height: float) -> dict[str, str]:
+    layer_token = format_layer_height_token(layer_height)
+    technology = "FDM" if endpoint == ORCA_SLICE_ENDPOINT or layer_height > 0.05 else "SLA"
+
+    fields: dict[str, str] = {
+        "sizeUnit": "mm",
+        "keepProportions": "true",
+        "scalePercent": "100",
+        "rotationX": "0",
+        "rotationY": "0",
+        "rotationZ": "0",
+    }
+
+    if endpoint == ORCA_SLICE_ENDPOINT:
+        fields["printerProfile"] = "Bambu_P1S_0.4_nozzle.json"
+        fields["processProfile"] = f"FDM_{layer_token}mm.json"
+    else:
+        fields["printerProfile"] = f"{technology}_{layer_token}mm.ini"
+
+    return fields
 
 
 @dataclass
@@ -148,6 +176,7 @@ def run_one_request(
     material: str,
     base_url: str,
     retry_on_429: int,
+    extra_fields: dict[str, str],
 ) -> QueueRequestResult:
     attempts = 0
     started = time.perf_counter()
@@ -162,6 +191,7 @@ def run_one_request(
             file_path=file_path,
             layer_height=layer_height,
             material=material,
+            extra_fields=extra_fields,
         )
 
         if status != 429:
@@ -267,7 +297,7 @@ def markdown_summary(results: Iterable[QueueRequestResult], generated_at: str, e
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--endpoint", default="/prusa/slice", choices=["/prusa/slice", "/orca/slice"])
+    parser.add_argument("--endpoint", default=PRUSA_SLICE_ENDPOINT, choices=[PRUSA_SLICE_ENDPOINT, ORCA_SLICE_ENDPOINT])
     parser.add_argument("--count", type=int, default=3, help="number of concurrent requests")
     parser.add_argument("--layer-height", type=float, default=0.2)
     parser.add_argument("--material", default="PLA")
@@ -296,6 +326,8 @@ def main() -> int:
     print(f"[QUEUE TEST] engine={resolve_engine_name(args.endpoint)}")
     print(f"[QUEUE TEST] admin_api_key_found={bool(admin_api_key)}")
 
+    extra_fields = build_extra_fields(args.endpoint, args.layer_height)
+
     results: list[QueueRequestResult] = []
 
     with ThreadPoolExecutor(max_workers=args.count) as executor:
@@ -309,6 +341,7 @@ def main() -> int:
                 args.material,
                 base_url,
                 args.retry_on_429,
+                extra_fields,
             )
             for index in range(1, args.count + 1)
         ]

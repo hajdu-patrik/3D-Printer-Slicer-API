@@ -7,17 +7,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const yauzl = require('yauzl');
 const { EXTENSIONS } = require('../../config/constants');
-
-/**
- * Parse positive integer values with a safe fallback.
- * @param {string | number | undefined} value Source value.
- * @param {number} fallback Fallback integer.
- * @returns {number} Positive integer result.
- */
-function parsePositiveInt(value, fallback) {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+const { parsePositiveInt } = require('./number-utils');
 
 const DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = parsePositiveInt(
@@ -40,10 +30,22 @@ function openZip(zipPath) {
     });
 }
 
+/**
+ * Sleep helper for retry pacing.
+ * @param {number} ms Wait duration in milliseconds.
+ * @returns {Promise<void>} Promise resolved after timeout.
+ */
 function sleepMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Open ZIP with retries to mitigate transient filesystem visibility delays.
+ * @param {string} zipPath ZIP path.
+ * @param {number} [attempts=5] Maximum open attempts.
+ * @param {number} [waitMs=80] Delay between retries in milliseconds.
+ * @returns {Promise<import('yauzl').ZipFile>} Opened zip handle.
+ */
 async function openZipWithRetry(zipPath, attempts = 5, waitMs = 80) {
     let lastError = null;
 
@@ -191,6 +193,11 @@ async function extractZipEntry(zipPath, entryName, destinationPath) {
     });
 }
 
+/**
+ * Resolve runtime ZIP path variations (`.zip` renamed during upload pipeline).
+ * @param {string} zipPath Candidate ZIP file path.
+ * @returns {string} Existing ZIP path.
+ */
 function resolveExistingZipPath(zipPath) {
     if (fs.existsSync(zipPath)) return zipPath;
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Mapping
 
 
 def parse_curl_output(output: str) -> tuple[int, dict | str | None]:
@@ -62,6 +63,7 @@ def curl_multipart_slice(
     file_path: Path,
     layer_height: float,
     material: str,
+    extra_fields: Mapping[str, str | int | float | bool] | None = None,
 ) -> tuple[int, dict | str | None, float]:
     cmd = [
         "curl",
@@ -75,9 +77,20 @@ def curl_multipart_slice(
         f"layerHeight={layer_height}",
         "-F",
         f"material={material}",
+    ]
+
+    if extra_fields:
+        for key, value in extra_fields.items():
+            if isinstance(value, bool):
+                normalized = "true" if value else "false"
+            else:
+                normalized = str(value)
+            cmd.extend(["-F", f"{key}={normalized}"])
+
+    cmd.extend([
         "-w",
         "\nHTTP_STATUS:%{http_code}\n",
-    ]
+    ])
 
     import time
 

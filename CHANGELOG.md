@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.1 (2026-03-05)
+
+### Changed
+
+- Hardened Prusa runtime INI update logic in `app/services/slice/profiles.js`:
+  - replaced fragile regex line replacement with line-based key upsert
+  - normalized mixed line ending handling (`CRLF` / `LF` / `CR`)
+- Updated Python geometry dependency stack in `requirements.txt`:
+  - added `mapbox-earcut==1.0.1`
+  - updated `manifold3d` to `3.4.0` (Python 3.12-compatible)
+- Reduced duplicated endpoint literals in test runners by introducing constants:
+  - `tests/testing-scripts/full_api_test_runner.py`
+  - `tests/testing-scripts/queue_concurrency_test_runner.py`
+- Hardened value parsing against unsafe object stringification:
+  - `app/services/slice/value-parsers.js`
+  - `app/services/slice/profiles.js`
+- Confirmed request-time model transform controls in slicing flow:
+  - target size configuration on `X`, `Y`, `Z` axes
+  - rotation configuration on `X`, `Y`, `Z` axes
+  - orientation preprocessing applied before slicing
+
+### Fixed
+
+- Fixed Prusa SLA runtime profile corruption that produced merged INI keys (e.g. `printer_technology = SLA\rlayer_height = ...`) and caused SLA slicing 500 errors.
+- Fixed Docker build failure caused by malformed concatenated requirement line in `requirements.txt`.
+- Fixed Docker build dependency resolution error for unavailable `manifold3d==0.0.6` on Python 3.12.
+
+### Validation
+
+- Verified targeted SLA-only manual runs for both supported SLA layer heights:
+  - `0.05` -> successful `200` responses with `.sl1` creation
+  - `0.025` -> successful `200` responses with `.sl1` creation (after rate-limit cooldown)
+- Verified syntax/quality checks on updated service and test files.
+
 ## v3.0.0 (2026-03-03)
 
 ### Added

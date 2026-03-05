@@ -33,6 +33,8 @@ RETRY_WAIT_SECONDS = 20
 
 FDM_LAYER_HEIGHTS = [0.1, 0.2, 0.3]
 SLA_LAYER_HEIGHTS = [0.05, 0.025]
+PRUSA_SLICE_ENDPOINT = "/prusa/slice"
+ORCA_SLICE_ENDPOINT = "/orca/slice"
 SUPPORTED_EXTENSIONS = {
     ".zip", ".stl", ".obj", ".3mf", ".ply",
     ".stp", ".step", ".igs", ".iges",
@@ -48,7 +50,7 @@ def resolve_runtime_env() -> tuple[str, bool]:
 
 
 def resolve_engine_name(endpoint: str) -> str:
-    return "Orca" if endpoint == "/orca/slice" else "Prusa"
+    return "Orca" if endpoint == ORCA_SLICE_ENDPOINT else "Prusa"
 
 
 @dataclass
@@ -70,6 +72,30 @@ class TestCaseResult:
     expected_hourly_rate: float | None
     actual_hourly_rate: float | None
     hourly_rate_matches_pricing_json: bool | None
+
+
+def format_layer_height_token(layer_height: float) -> str:
+    return f"{layer_height:.3f}".rstrip("0").rstrip(".")
+
+
+def build_extra_fields(endpoint: str, technology: str, layer_height: float) -> dict[str, str]:
+    layer_token = format_layer_height_token(layer_height)
+    fields: dict[str, str] = {
+        "sizeUnit": "mm",
+        "keepProportions": "true",
+        "scalePercent": "100",
+        "rotationX": "0",
+        "rotationY": "0",
+        "rotationZ": "0",
+    }
+
+    if endpoint == ORCA_SLICE_ENDPOINT:
+        fields["printerProfile"] = "Bambu_P1S_0.4_nozzle.json"
+        fields["processProfile"] = f"FDM_{layer_token}mm.json"
+    else:
+        fields["printerProfile"] = f"{technology}_{layer_token}mm.ini"
+
+    return fields
 
 
 def discover_test_files(root: Path) -> list[Path]:
@@ -100,20 +126,42 @@ def expected_hint_for_category(category: str) -> str:
     return "unknown"
 
 
-def run_slice_request(base_url: str, endpoint: str, file_path: Path, layer_height: float, material: str) -> tuple[int, dict | str | None, float]:
+def run_slice_request(
+    base_url: str,
+    endpoint: str,
+    file_path: Path,
+    layer_height: float,
+    material: str,
+    extra_fields: dict[str, str] | None = None,
+) -> tuple[int, dict | str | None, float]:
     return curl_multipart_slice(
         base_url=base_url,
         endpoint=endpoint,
         file_path=file_path,
         layer_height=layer_height,
         material=material,
+        extra_fields=extra_fields,
     )
 
 
-def run_slice_request_with_retry(base_url: str, endpoint: str, file_path: Path, layer_height: float, material: str) -> tuple[int, dict | str | None, float]:
+def run_slice_request_with_retry(
+    base_url: str,
+    endpoint: str,
+    file_path: Path,
+    layer_height: float,
+    material: str,
+    extra_fields: dict[str, str] | None = None,
+) -> tuple[int, dict | str | None, float]:
     total_duration = 0.0
     for attempt in range(1, RETRY_ON_429 + 1):
-        status, body, duration = run_slice_request(base_url, endpoint, file_path, layer_height, material)
+        status, body, duration = run_slice_request(
+            base_url,
+            endpoint,
+            file_path,
+            layer_height,
+            material,
+            extra_fields,
+        )
         total_duration += duration
 
         if status != 429:
@@ -199,12 +247,75 @@ def markdown_summary(results: Iterable[TestCaseResult], generated_at: str) -> st
     return "\n".join(lines) + "\n"
 
 
-def build_test_plan(fdm_cycle, sla_cycle) -> list[tuple[str, str, float, str]]:
+def build_test_plan(fdm_cycle, sla_cycle) -> list[tuple[str, str, float, str, dict[str, str]]]:
+    prusa_fdm_layer = next(fdm_cycle)
+    prusa_sla_layer = next(sla_cycle)
+    orca_layer = next(fdm_cycle)
+
     return [
-        ("/prusa/slice", "FDM", next(fdm_cycle), "PLA"),
-        ("/prusa/slice", "SLA", next(sla_cycle), "Standard"),
-        ("/orca/slice", "FDM", next(fdm_cycle), "PLA"),
+        (
+            PRUSA_SLICE_ENDPOINT,
+            "FDM",
+            prusa_fdm_layer,
+            "PLA",
+            build_extra_fields(PRUSA_SLICE_ENDPOINT, "FDM", prusa_fdm_layer),
+        ),
+        (
+            PRUSA_SLICE_ENDPOINT,
+            "SLA",
+            prusa_sla_layer,
+            "Standard",
+            build_extra_fields(PRUSA_SLICE_ENDPOINT, "SLA", prusa_sla_layer),
+        ),
+        (
+            ORCA_SLICE_ENDPOINT,
+            "FDM",
+            orca_layer,
+            "PLA",
+            build_extra_fields(ORCA_SLICE_ENDPOINT, "FDM", orca_layer),
+        ),
     ]
+
+
+def _validate_new_field_payload(
+    *,
+    body: dict,
+    endpoint: str,
+    expected_fields: dict[str, str],
+) -> tuple[bool, str | None]:
+    model_transform = body.get("model_transform")
+    if not isinstance(model_transform, dict):
+        return False, "Missing model_transform in success response"
+
+    build_volume_limits = body.get("build_volume_limits_mm")
+    if not isinstance(build_volume_limits, dict):
+        return False, "Missing build_volume_limits_mm in success response"
+
+    if not isinstance(build_volume_limits.get("min"), dict) or not isinstance(build_volume_limits.get("max"), dict):
+        return False, "build_volume_limits_mm must include min/max objects"
+
+    expected_unit = expected_fields.get("sizeUnit", "mm").lower()
+    if str(model_transform.get("size_unit", "")).lower() != expected_unit:
+        return False, f"model_transform.size_unit mismatch: expected {expected_unit}, got {model_transform.get('size_unit')}"
+
+    expected_keep = expected_fields.get("keepProportions", "true").strip().lower() == "true"
+    if bool(model_transform.get("keep_proportions")) != expected_keep:
+        return False, (
+            f"model_transform.keep_proportions mismatch: expected {expected_keep}, "
+            f"got {model_transform.get('keep_proportions')}"
+        )
+
+    profiles = body.get("profiles")
+    if not isinstance(profiles, dict):
+        return False, "Missing profiles object in success response"
+
+    if endpoint == ORCA_SLICE_ENDPOINT:
+        if not profiles.get("machine_profile") or not profiles.get("process_profile"):
+            return False, "Orca response must include machine_profile and process_profile"
+    elif not profiles.get("prusa_profile"):
+        return False, "Prusa response must include prusa_profile"
+
+    return True, None
 
 
 def evaluate_slice_response(
@@ -214,6 +325,8 @@ def evaluate_slice_response(
     technology: str,
     material: str,
     pricing_map: dict | None,
+    endpoint: str,
+    expected_fields: dict[str, str],
 ) -> tuple[bool, str | None, str | None, float | None, float | None, bool | None]:
     if not isinstance(body, dict):
         success = 200 <= status < 300
@@ -241,6 +354,17 @@ def evaluate_slice_response(
                 f"hourly_rate mismatch: expected {expected_hourly_rate} from /pricing, got {actual_hourly_rate}"
             )
 
+    if success:
+        payload_valid, payload_error = _validate_new_field_payload(
+            body=body,
+            endpoint=endpoint,
+            expected_fields=expected_fields,
+        )
+        if not payload_valid:
+            success = False
+            error_code = error_code or 'NEW_FIELDS_VALIDATION_FAILED'
+            error_message = payload_error
+
     return success, error_code, error_message, expected_hourly_rate, actual_hourly_rate, hourly_rate_matches
 
 
@@ -251,18 +375,25 @@ def run_file_plan(
     category: str,
     expected_hint: str,
     req_index_start: int,
-    plan: list[tuple[str, str, float, str]],
+    plan: list[tuple[str, str, float, str, dict[str, str]]],
     pricing_map: dict | None,
 ) -> tuple[list[TestCaseResult], int]:
     results: list[TestCaseResult] = []
     req_index = req_index_start
 
-    for endpoint, technology, layer_height, material in plan:
+    for endpoint, technology, layer_height, material, extra_fields in plan:
         engine = resolve_engine_name(endpoint)
         print(
             f"[RUNNER] #{req_index} -> {engine}/{technology} | {file_path.relative_to(TESTS_ROOT)} | layer={layer_height}"
         )
-        status, body, duration = run_slice_request_with_retry(base_url, endpoint, file_path, layer_height, material)
+        status, body, duration = run_slice_request_with_retry(
+            base_url,
+            endpoint,
+            file_path,
+            layer_height,
+            material,
+            extra_fields,
+        )
 
         (
             success,
@@ -277,6 +408,8 @@ def run_file_plan(
             technology=technology,
             material=material,
             pricing_map=pricing_map,
+            endpoint=endpoint,
+            expected_fields=extra_fields,
         )
 
         results.append(

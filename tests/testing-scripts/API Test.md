@@ -27,6 +27,12 @@
 	- Automatically retries `429` responses (`Retry-After`) so higher `N` still testable under rate limit.
 	- Verifies whether completion order follows arrival order (queue semantics).
 
+- `python "tests/testing-scripts/sla_manual_test_runner.py"`
+	- Manual, SLA-only smoke test against **Prusa** `/prusa/slice`.
+	- Default target file: `tests/testing-files/direct/Creeper.stl`.
+	- Supports custom file/layer/profile flags for focused regression checks.
+	- Optionally verifies that a new `.sl1` appears via `GET /admin/output-files` (when `ADMIN_API_KEY` is configured).
+
 ---
 
 ## Test reports are written to `tests/testing-scripts/results/`:
@@ -42,3 +48,6 @@
 
 - `queue_concurrency_test_result.md`
 	- Concurrent queue behavior outputs (arrival-order + staggered completion analysis).
+
+- `sla_manual_test_result.md`
+	- SLA-only manual verification summary, including optional `.sl1` creation checks.

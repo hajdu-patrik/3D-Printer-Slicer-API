@@ -1,7 +1,7 @@
 <img width="2048" height="2048" alt="API-LOGO" src="https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a" />
 
-![Node.js](https://img.shields.io/badge/Node.js-18.19.1-339933?style=flat&logo=node.js&logoColor=white)
-![Express](https://img.shields.io/badge/Backend-Express_4.22.1-000000?style=flat&logo=express&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=flat&logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Express_4.18.2-000000?style=flat&logo=express&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
 ![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.1-orange?style=flat)
 ![OrcaSlicer](https://img.shields.io/badge/Slicer-OrcaSlicer_2.3.1-8A2BE2?style=flat)
@@ -32,7 +32,7 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 
 | Category | Extensions |
 |---|---|
-| Direct 3D | `.stl`, `.obj`, `.3mf`, `.ply` |
+| Direct 3D | `.stl`, `.obj`, `.3mf` |
 | NURBS / CAD | `.stp`, `.step`, `.igs`, `.iges`, `.ply` |
 | Vector | `.dxf`, `.svg`, `.eps`, `.pdf` |
 | Image | `.jpg`, `.jpeg`, `.png`, `.bmp` |
@@ -81,6 +81,13 @@ Optional fields:
 - `material`
 - `infill` (`0`-`100`)
 - `depth`
+- `sizeUnit` (`mm` or `inch`)
+- `keepProportions` (`true`/`false`, default `true`)
+- `targetSizeX`, `targetSizeY`, `targetSizeZ` (target dimensions in selected unit)
+- `scalePercent` (uniform scale; cannot be combined with `targetSizeX/Y/Z`)
+- `rotationX`, `rotationY`, `rotationZ` (degrees)
+- `printerProfile` (profile override filename)
+- `processProfile` (Orca only process profile override filename)
 
 ### `POST /prusa/slice`
 
@@ -91,6 +98,13 @@ Uses `prusa-slicer`.
   - `0.1`, `0.2`, `0.3` → `FDM`
 - Rejects invalid `layerHeight` values outside `0.025, 0.05, 0.1, 0.2, 0.3`
 - Validates material/technology compatibility
+- Supports size preprocessing before slicing:
+  - mm/inch target dimensions
+  - aspect-ratio lock (`keepProportions=true`)
+  - free X/Y/Z sizing (`keepProportions=false`)
+  - optional X/Y/Z rotation
+- Validates final model size against selected printer profile limits (`min`/`max` build volume)
+- You can override profile file with `printerProfile` from `configs/prusa`
 
 Example:
 
@@ -100,7 +114,10 @@ curl -X POST http://localhost:3000/prusa/slice \
   -F "choosenFile=@/path/to/model.stl" \
   -F "layerHeight=0.2" \
   -F "material=PLA" \
-  -F "infill=20"
+  -F "infill=20" \
+  -F "sizeUnit=mm" \
+  -F "keepProportions=true" \
+  -F "targetSizeZ=120"
 ```
 
 ### `POST /orca/slice`
@@ -116,6 +133,11 @@ Uses `orca-slicer`.
   - `ORCA_PROCESS_PROFILE_0_1`
   - `ORCA_PROCESS_PROFILE_0_2`
   - `ORCA_PROCESS_PROFILE_0_3`
+- Request-level profile overrides are supported:
+  - `printerProfile` → machine profile from `configs/orca`
+  - `processProfile` → process profile from `configs/orca`
+- Supports same size preprocessing options as Prusa endpoint (`sizeUnit`, `keepProportions`, `targetSizeX/Y/Z`, `scalePercent`, rotations)
+- Validates final model size against selected machine profile build-volume limits
 
 Example:
 
@@ -125,7 +147,14 @@ curl -X POST http://localhost:3000/orca/slice \
   -F "choosenFile=@/path/to/model.stl" \
   -F "layerHeight=0.2" \
   -F "material=PLA" \
-  -F "infill=20"
+  -F "infill=20" \
+  -F "printerProfile=Bambu_P1S_0.4_nozzle.json" \
+  -F "processProfile=FDM_0.2mm.json" \
+  -F "sizeUnit=inch" \
+  -F "keepProportions=false" \
+  -F "targetSizeX=8.0" \
+  -F "targetSizeY=8.0" \
+  -F "targetSizeZ=5.0"
 ```
 
 ### Common successful response
@@ -137,6 +166,52 @@ curl -X POST http://localhost:3000/orca/slice \
   "technology": "FDM",
   "material": "PLA",
   "infill": "20%",
+  "profiles": {
+    "prusa_profile": "FDM_0.2mm.ini"
+  },
+  "model_transform": {
+    "size_unit": "mm",
+    "keep_proportions": true,
+    "requested_size": {
+      "x": null,
+      "y": null,
+      "z": 120
+    },
+    "scale_percent": null,
+    "scale_factors": {
+      "x": 1.5,
+      "y": 1.5,
+      "z": 1.5
+    },
+    "rotation_deg": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "original_dimensions_mm": {
+      "x": 80,
+      "y": 60,
+      "z": 80
+    },
+    "final_dimensions_mm": {
+      "x": 120,
+      "y": 90,
+      "z": 120
+    }
+  },
+  "build_volume_limits_mm": {
+    "min": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "max": {
+      "x": 256,
+      "y": 256,
+      "z": 210
+    },
+    "source_profile": "FDM_0.2mm.ini"
+  },
   "hourly_rate": 800,
   "stats": {
     "print_time_seconds": 5400,
@@ -155,12 +230,25 @@ curl -X POST http://localhost:3000/orca/slice \
 - `INVALID_LAYER_HEIGHT_FOR_TECHNOLOGY`
 - `INVALID_MATERIAL_FOR_TECHNOLOGY`
 - `MATERIAL_TECHNOLOGY_MISMATCH`
+- `RATE_LIMIT_EXCEEDED`
 - `INVALID_SOURCE_ARCHIVE`
 - `INVALID_SOURCE_GEOMETRY`
+- `UNSUPPORTED_FILE_FORMAT`
 - `ORCA_PROFILE_INCOMPATIBLE`
+- `INVALID_SIZE_UNIT`
+- `INVALID_KEEP_PROPORTIONS`
+- `INVALID_SIZE_OPTIONS`
+- `INVALID_ROTATION_OPTIONS`
+- `CONFLICTING_SIZE_OPTIONS`
+- `INVALID_PROFILE_NAME`
+- `PROFILE_NOT_FOUND`
+- `MODEL_DIMENSIONS_UNAVAILABLE`
+- `MODEL_OUT_OF_PRINTER_BOUNDS`
 - `FILE_PROCESSING_TIMEOUT`
 - `SLICE_QUEUE_FULL`
 - `SLICE_QUEUE_TIMEOUT`
+- `QUEUE_INTERNAL_ERROR`
+- `INTERNAL_PROCESSING_ERROR`
 
 ---
 
@@ -206,23 +294,21 @@ Lists generated `.gcode` / `.sl1` files from `output/`.
 ```json
 {
   "success": true,
+  "total": 2,
   "files": [
     {
-      "filename": "model_20240915_153045.gcode",
-      "technology": "FDM",
-      "material": "PLA",
-      "layerHeight": 0.2,
-      "infill": 20,
-      "slicer_engine": "prusa",
-      "created_at": "2024-09-15T15:30:45Z"
+      "fileName": "model-output-1741285245000.gcode",
+      "downloadUrl": "/download/model-output-1741285245000.gcode",
+      "sizeBytes": 182734,
+      "createdAt": "2026-03-05T10:07:25.000Z",
+      "modifiedAt": "2026-03-05T10:07:27.000Z"
     },
     {
-      "filename": "model_20240915_154200.sl1",
-      "technology": "SLA",
-      "material": "Resin_X",
-      "layerHeight": 0.05,
-      "slicer_engine": "orca",
-      "created_at": "2024-09-15T15:42:00Z"
+      "fileName": "model-output-1741285301000.sl1",
+      "downloadUrl": "/download/model-output-1741285301000.sl1",
+      "sizeBytes": 941282,
+      "createdAt": "2026-03-05T10:08:21.000Z",
+      "modifiedAt": "2026-03-05T10:08:24.000Z"
     }
   ]
 }
@@ -245,7 +331,7 @@ Common slicing error responses:
 1. Create your env file from template:
 
 ```bash
-cp .env.template .env
+cp .env.example .env
 ```
 
 2. Set at least `ADMIN_API_KEY` in `.env`.
@@ -267,11 +353,21 @@ No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` 
 
 ### Config files you can use out-of-the-box
 
-- `configs/FDM_0.1mm.ini`
-- `configs/FDM_0.2mm.ini`
-- `configs/FDM_0.3mm.ini`
-- `configs/SLA_0.025mm.ini`
-- `configs/SLA_0.05mm.ini`
+- Prusa process/printer profiles (`.ini`):
+  - `configs/prusa/FDM_0.1mm.ini`
+  - `configs/prusa/FDM_0.2mm.ini`
+  - `configs/prusa/FDM_0.3mm.ini`
+  - `configs/prusa/SLA_0.025mm.ini`
+  - `configs/prusa/SLA_0.05mm.ini`
+- Orca machine/process profiles (`.json`):
+  - `configs/orca/Bambu_P1S_0.4_nozzle.json`
+  - `configs/orca/FDM_0.1mm.json`
+  - `configs/orca/FDM_0.2mm.json`
+  - `configs/orca/FDM_0.3mm.json`
+
+You can add your own profiles (for example 2 FDM + 2 SLA for Prusa, or multiple Orca machine profiles), then select them per request with `printerProfile` (and `processProfile` for Orca).
+
+Different printer/process profiles produce different G-code behavior in practice (speed, accelerations, cooling, supports, extrusion strategy), even for the same model.
 
 ---
 
@@ -286,10 +382,10 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`).
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
-- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `500MB`).
+- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `100MB`).
 - **ZIP Safety Limits:** ZIP extraction is guarded by max entries and max cumulative extracted size (`MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`).
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
-- **Slicer Profiles:** Stored in `configs/*.ini` (e.g. `FDM_0.2mm.ini`, `SLA_0.05mm.ini`).
+- **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
 - **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
 

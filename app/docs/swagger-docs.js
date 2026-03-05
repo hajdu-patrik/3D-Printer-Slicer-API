@@ -1,10 +1,5 @@
 /**
- * OpenAPI document for the 3D Printer Slicer API.
- * Contains pricing and slicing endpoint schemas.
- */
-
-/**
- * Build OpenAPI document dynamically from current pricing state.
+ * Build OpenAPI document for pricing and slicing endpoints.
  * @param {{FDM?: Record<string, number>, SLA?: Record<string, number>}} pricing Current pricing map.
  * @returns {object} OpenAPI document object.
  */
@@ -13,7 +8,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '3.0.0',
+            version: '3.0.1',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -257,7 +252,7 @@ function createSwaggerDocument(pricing) {
             post: {
                 tags: ['Slicing'],
                 summary: 'PrusaSlicer endpoint (FDM/SLA auto mode by layer height).',
-                description: 'Uses PrusaSlicer. Automatically chooses technology by layer height: SLA for 0.025/0.05, FDM for 0.1/0.2/0.3. Material must belong to the selected technology, otherwise request fails with 4xx.',
+                description: 'Uses PrusaSlicer. Automatically chooses technology by layer height: SLA for 0.025/0.05, FDM for 0.1/0.2/0.3. Supports optional size/scale/rotation preprocessing and printer profile based build-volume validation.',
                 consumes: ['multipart/form-data'],
                 requestBody: {
                     required: true,
@@ -288,6 +283,52 @@ function createSwaggerDocument(pricing) {
                                         minimum: 0,
                                         maximum: 100,
                                         description: 'Infill percentage from `0` to `100` (used for FDM).' 
+                                    },
+                                    sizeUnit: {
+                                        type: 'string',
+                                        enum: ['mm', 'inch'],
+                                        default: 'mm',
+                                        description: 'Unit for targetSizeX/Y/Z values.'
+                                    },
+                                    keepProportions: {
+                                        type: 'boolean',
+                                        default: true,
+                                        description: 'If true, target dimensions are interpreted with locked aspect ratio.'
+                                    },
+                                    targetSizeX: {
+                                        type: 'number',
+                                        description: 'Optional target X size in the selected sizeUnit.'
+                                    },
+                                    targetSizeY: {
+                                        type: 'number',
+                                        description: 'Optional target Y size in the selected sizeUnit.'
+                                    },
+                                    targetSizeZ: {
+                                        type: 'number',
+                                        description: 'Optional target Z size in the selected sizeUnit.'
+                                    },
+                                    scalePercent: {
+                                        type: 'number',
+                                        description: 'Optional uniform scale in percent. Cannot be combined with targetSizeX/Y/Z.'
+                                    },
+                                    rotationX: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around X axis in degrees.'
+                                    },
+                                    rotationY: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around Y axis in degrees.'
+                                    },
+                                    rotationZ: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around Z axis in degrees.'
+                                    },
+                                    printerProfile: {
+                                        type: 'string',
+                                        description: 'Optional override profile filename from `configs/prusa` (for example `FDM_0.2mm.ini`).'
                                     }
                                 },
                                 required: ['choosenFile', 'layerHeight', 'material']
@@ -298,6 +339,7 @@ function createSwaggerDocument(pricing) {
                 responses: {
                     200: { description: 'Slicing successful' },
                     400: { description: 'Bad Request' },
+                    422: { description: 'Model or profile validation failed (for example out-of-printer-bounds model).' },
                     500: { description: 'Server Error' }
                 }
             }
@@ -306,7 +348,7 @@ function createSwaggerDocument(pricing) {
             post: {
                 tags: ['Slicing'],
                 summary: 'OrcaSlicer endpoint (FDM-only).',
-                description: 'Uses OrcaSlicer and always processes as FDM, including pricing. Includes --arrange 1 and --orient 1 for automatic layout. SLA materials are rejected with 4xx.',
+                description: 'Uses OrcaSlicer and always processes as FDM, including pricing. Supports optional size/scale/rotation preprocessing, machine/process profile overrides, and profile-based build-volume validation.',
                 consumes: ['multipart/form-data'],
                 requestBody: {
                     required: true,
@@ -337,6 +379,56 @@ function createSwaggerDocument(pricing) {
                                         minimum: 0,
                                         maximum: 100,
                                         description: 'Infill percentage from `0` to `100`.'
+                                    },
+                                    sizeUnit: {
+                                        type: 'string',
+                                        enum: ['mm', 'inch'],
+                                        default: 'mm',
+                                        description: 'Unit for targetSizeX/Y/Z values.'
+                                    },
+                                    keepProportions: {
+                                        type: 'boolean',
+                                        default: true,
+                                        description: 'If true, target dimensions are interpreted with locked aspect ratio.'
+                                    },
+                                    targetSizeX: {
+                                        type: 'number',
+                                        description: 'Optional target X size in the selected sizeUnit.'
+                                    },
+                                    targetSizeY: {
+                                        type: 'number',
+                                        description: 'Optional target Y size in the selected sizeUnit.'
+                                    },
+                                    targetSizeZ: {
+                                        type: 'number',
+                                        description: 'Optional target Z size in the selected sizeUnit.'
+                                    },
+                                    scalePercent: {
+                                        type: 'number',
+                                        description: 'Optional uniform scale in percent. Cannot be combined with targetSizeX/Y/Z.'
+                                    },
+                                    rotationX: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around X axis in degrees.'
+                                    },
+                                    rotationY: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around Y axis in degrees.'
+                                    },
+                                    rotationZ: {
+                                        type: 'number',
+                                        default: 0,
+                                        description: 'Optional rotation around Z axis in degrees.'
+                                    },
+                                    printerProfile: {
+                                        type: 'string',
+                                        description: 'Optional Orca machine profile filename from `configs/orca` (for example `Bambu_P1S_0.4_nozzle.json`).'
+                                    },
+                                    processProfile: {
+                                        type: 'string',
+                                        description: 'Optional Orca process profile filename from `configs/orca` (for example `FDM_0.2mm.json`).'
                                     }
                                 },
                                 required: ['choosenFile', 'layerHeight', 'material']
@@ -347,6 +439,7 @@ function createSwaggerDocument(pricing) {
                 responses: {
                     200: { description: 'Slicing successful' },
                     400: { description: 'Bad Request' },
+                    422: { description: 'Model or profile validation failed (for example out-of-printer-bounds model).' },
                     500: { description: 'Server Error' }
                 }
             }

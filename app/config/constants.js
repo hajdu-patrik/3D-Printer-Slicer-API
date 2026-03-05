@@ -70,6 +70,16 @@ const MAX_BUILD_VOLUMES = {
 };
 
 /**
+ * Minimum printable build volumes in millimeters by technology.
+ * These are conservative safety defaults and can be overridden by profile metadata.
+ * @type {{FDM: {x: number, y: number, z: number}, SLA: {x: number, y: number, z: number}}}
+ */
+const MIN_BUILD_VOLUMES = {
+    FDM: { x: 1, y: 1, z: 1 },
+    SLA: { x: 1, y: 1, z: 1 }
+};
+
+/**
  * Accepted file extensions grouped by processing pipeline.
  * @type {{direct: string[], cad: string[], image: string[], vector: string[], archive: string[]}}
  */
@@ -93,6 +103,7 @@ module.exports = {
     ORCA_PROCESS_PROFILE_BY_LAYER,
     DEFAULT_PRICING,
     MAX_BUILD_VOLUMES,
+    MIN_BUILD_VOLUMES,
     EXTENSIONS,
     PORT
 };

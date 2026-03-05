@@ -10,6 +10,11 @@ const { DEFAULT_PRICING } = require('../config/constants');
 let pricing = structuredClone(DEFAULT_PRICING);
 let activePricingFile = PRICING_FILE;
 
+/**
+ * Read and normalize pricing payload from disk.
+ * @param {string} filePath Absolute path to pricing file.
+ * @returns {{FDM: Record<string, number>, SLA: Record<string, number>}} Parsed and merged pricing map.
+ */
 function readPricingFile(filePath) {
     const pricingRaw = fs.readFileSync(filePath, 'utf8');
     const parsed = JSON.parse(pricingRaw);
@@ -24,12 +29,21 @@ function readPricingFile(filePath) {
     };
 }
 
+/**
+ * Write current in-memory pricing to a target file.
+ * @param {string} filePath Absolute path to target pricing file.
+ * @returns {void}
+ */
 function writePricingFile(filePath) {
     const parentDir = path.dirname(filePath);
     if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(pricing, null, 2));
 }
 
+/**
+ * Resolve candidate pricing files ordered by most recently modified.
+ * @returns {string[]} Existing pricing file paths sorted descending by mtime.
+ */
 function getExistingCandidates() {
     const primaryExists = fs.existsSync(PRICING_FILE);
     const candidates = primaryExists

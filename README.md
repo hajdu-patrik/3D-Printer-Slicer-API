@@ -382,8 +382,8 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`).
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
-- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `100MB`).
-- **ZIP Safety Limits:** ZIP extraction is guarded by max entries and max cumulative extracted size (`MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`).
+- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `250MB`).
+- **ZIP Safety Limits:** ZIP extraction is guarded by max entries and max cumulative extracted size (`MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`, default `250MB`).
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.

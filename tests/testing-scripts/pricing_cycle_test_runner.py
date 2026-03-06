@@ -120,6 +120,75 @@ def _get_price(pricing_body: dict | str | None, technology: str, material: str) 
     return None
 
 
+def _execute_authorized_mutation_step(
+    *,
+    results: list[StepResult],
+    base_url: str,
+    api_keys: list[str],
+    technology: str,
+    material: str,
+    step: str,
+    method: str,
+    endpoint: str,
+    body: dict | None,
+    expected_status: int,
+    details: str,
+) -> tuple[int, dict | str | None]:
+    status, payload = _authorized_request_with_fallback(base_url, method, endpoint, body, api_keys)
+    ok = status == expected_status and isinstance(payload, dict) and bool(payload.get("success"))
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step=step,
+        method=method,
+        endpoint=endpoint,
+        expected_status=expected_status,
+        actual_status=status,
+        ok=ok,
+        details=details,
+        body=payload,
+    )
+    return status, payload
+
+
+def _execute_pricing_verification_step(
+    *,
+    results: list[StepResult],
+    base_url: str,
+    technology: str,
+    material: str,
+    step: str,
+    details: str,
+    expected_price: float | None,
+    should_exist: bool,
+) -> tuple[int, dict | str | None]:
+    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
+    exists = _exists_in_pricing(body, technology, material)
+    current_price = _get_price(body, technology, material)
+
+    if should_exist:
+        ok = status == 200 and exists and current_price == expected_price
+    else:
+        ok = status == 200 and not exists
+
+    _record(
+        results,
+        technology=technology,
+        material=material,
+        step=step,
+        method="GET",
+        endpoint=PRICING_ENDPOINT,
+        expected_status=200,
+        actual_status=status,
+        ok=ok,
+        details=details,
+        body=body,
+    )
+
+    return status, body
+
+
 def run_cycle_for_technology(base_url: str, technology: str, base_material: str, create_price: int, update_price: int, api_keys: list[str]) -> list[StepResult]:
     results: list[StepResult] = []
     suffix = f"{int(time.time())}_{secrets.token_hex(3)}"
@@ -128,110 +197,79 @@ def run_cycle_for_technology(base_url: str, technology: str, base_material: str,
     create_endpoint = f"/pricing/{technology}"
     patch_endpoint = f"/pricing/{technology}/{material}"
 
-    # 1) create
-    status, body = _authorized_request_with_fallback(base_url, "POST", create_endpoint, {"material": material, "price": create_price}, api_keys)
-    ok = status == 201 and isinstance(body, dict) and bool(body.get("success"))
-    _record(
-        results,
+    _execute_authorized_mutation_step(
+        results=results,
+        base_url=base_url,
+        api_keys=api_keys,
         technology=technology,
         material=material,
         step="create",
         method="POST",
         endpoint=create_endpoint,
+        body={"material": material, "price": create_price},
         expected_status=201,
-        actual_status=status,
-        ok=ok,
         details="Create new material",
-        body=body,
     )
 
-    # 2) verify create with GET
-    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
-    exists_after_create = status == 200 and _exists_in_pricing(body, technology, material)
-    created_price = _get_price(body, technology, material)
-    ok = exists_after_create and created_price == float(create_price)
-    _record(
-        results,
+    _execute_pricing_verification_step(
+        results=results,
+        base_url=base_url,
         technology=technology,
         material=material,
         step="verify_create",
-        method="GET",
-        endpoint=PRICING_ENDPOINT,
-        expected_status=200,
-        actual_status=status,
-        ok=ok,
         details=f"Material exists with price={create_price}",
-        body=body,
+        expected_price=float(create_price),
+        should_exist=True,
     )
 
-    # 3) patch/update
-    status, body = _authorized_request_with_fallback(base_url, "PATCH", patch_endpoint, {"price": update_price}, api_keys)
-    ok = status == 200 and isinstance(body, dict) and bool(body.get("success"))
-    _record(
-        results,
+    _execute_authorized_mutation_step(
+        results=results,
+        base_url=base_url,
+        api_keys=api_keys,
         technology=technology,
         material=material,
         step="update",
         method="PATCH",
         endpoint=patch_endpoint,
+        body={"price": update_price},
         expected_status=200,
-        actual_status=status,
-        ok=ok,
         details=f"Update material price to {update_price}",
-        body=body,
     )
 
-    # 4) verify update with GET
-    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
-    updated_price = _get_price(body, technology, material)
-    ok = status == 200 and updated_price == float(update_price)
-    _record(
-        results,
+    _execute_pricing_verification_step(
+        results=results,
+        base_url=base_url,
         technology=technology,
         material=material,
         step="verify_update",
-        method="GET",
-        endpoint=PRICING_ENDPOINT,
-        expected_status=200,
-        actual_status=status,
-        ok=ok,
         details=f"Material price changed to {update_price}",
-        body=body,
+        expected_price=float(update_price),
+        should_exist=True,
     )
 
-    # 5) delete
-    status, body = _authorized_request_with_fallback(base_url, "DELETE", patch_endpoint, None, api_keys)
-    ok = status == 200 and isinstance(body, dict) and bool(body.get("success"))
-    _record(
-        results,
+    _execute_authorized_mutation_step(
+        results=results,
+        base_url=base_url,
+        api_keys=api_keys,
         technology=technology,
         material=material,
         step="delete",
         method="DELETE",
         endpoint=patch_endpoint,
+        body=None,
         expected_status=200,
-        actual_status=status,
-        ok=ok,
         details="Delete created material",
-        body=body,
     )
 
-    # 6) verify deletion with GET
-    status, body = _curl_request(base_url, "GET", PRICING_ENDPOINT)
-    still_exists = _exists_in_pricing(body, technology, material)
-    ok = status == 200 and not still_exists
-    _record(
-        results,
+    _execute_pricing_verification_step(
+        results=results,
+        base_url=base_url,
         technology=technology,
         material=material,
         step="verify_delete",
-        method="GET",
-        endpoint=PRICING_ENDPOINT,
-        expected_status=200,
-        actual_status=status,
-        ok=ok,
         details="Material removed from pricing map",
-        body=body,
+        expected_price=None,
+        should_exist=False,
     )
 
     return results

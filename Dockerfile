@@ -110,6 +110,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /usr/lib/node_modules/npm \
+    && rm -f /usr/bin/npm /usr/bin/npx /usr/bin/corepack \
+    && apt-get purge -y --auto-remove curl gnupg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /tmp/*
 

@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.2 (2026-03-65)
+
+### Changed
+
+- Decomposed large orchestration blocks for maintainability:
+  - `app/services/slice.service.js` (pipeline helpers + response builder extraction)
+  - `tests/testing-scripts/admin_output_files_test_runner.py` (validation helpers)
+  - `tests/testing-scripts/pricing_cycle_test_runner.py` (shared mutation/verification step helpers)
+- Split full API matrix testing into dedicated per-engine/per-technology runners:
+  - `tests/testing-scripts/full_api_orca_fdm_test_runner.py`
+  - `tests/testing-scripts/full_api_prusa_fdm_test_runner.py`
+  - `tests/testing-scripts/full_api_prusa_sl1_test_runner.py`
+  - kept `tests/testing-scripts/full_api_test_runner.py` as a suite wrapper that executes all three and writes a consolidated summary
+- Hardened runtime image contents in `Dockerfile` without changing app behavior:
+  - removed npm CLI (`npm` / `npx` / `corepack`) from final runtime stage
+  - removed build-only runtime tools (`curl`, `gnupg`) after Node installation in final stage
+- Updated API testing guide for the split full API runners and report outputs:
+  - `tests/testing-scripts/API Test.md`
+
+### Validation
+
+- Verified syntax/quality checks on updated service and test files.
+- Verified one end-to-end FDM slicing smoke request after slice service decomposition (`HTTP 200`).
+- Verified rebuilt backend container reached healthy state after Dockerfile hardening changes.
+
 ## v3.0.1 (2026-03-05)
 
 ### Changed
@@ -34,7 +59,6 @@ All notable changes to this project are documented in this file.
 - Verified targeted SLA-only manual runs for both supported SLA layer heights:
   - `0.05` -> successful `200` responses with `.sl1` creation
   - `0.025` -> successful `200` responses with `.sl1` creation (after rate-limit cooldown)
-- Verified syntax/quality checks on updated service and test files.
 
 ## v3.0.0 (2026-03-03)
 

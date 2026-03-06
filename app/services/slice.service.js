@@ -73,6 +73,159 @@ function findUploadedModelFile(req) {
 }
 
 /**
+ * Build standardized unsupported-format response and cleanup upload temp file.
+ * @param {import('express').Response} res Express response.
+ * @param {string} inputFile Uploaded temp file path.
+ * @returns {import('express').Response} Error response.
+ */
+function createUnsupportedFormatResponse(res, inputFile) {
+    cleanupFiles([inputFile]);
+    return res.status(400).json({
+        success: false,
+        error: `Unsupported file format. Supported file extensions: ${getSupportedInputExtensionsText()}`,
+        errorCode: 'UNSUPPORTED_FILE_FORMAT'
+    });
+}
+
+/**
+ * Rename uploaded temporary file to include original extension.
+ * @param {string} inputFile Uploaded temp file path.
+ * @param {string} originalExt Original extension including dot.
+ * @param {string[]} filesCleanupList Cleanup collector.
+ * @returns {string} Renamed file path.
+ */
+function appendOriginalExtensionToUpload(inputFile, originalExt, filesCleanupList) {
+    const tempFileWithExt = inputFile + originalExt;
+    fs.renameSync(inputFile, tempFileWithExt);
+    filesCleanupList.push(tempFileWithExt);
+    return tempFileWithExt;
+}
+
+/**
+ * Execute input preprocessing pipeline until a slicer-ready file is available.
+ * @param {string} inputFile Input file path with original extension.
+ * @param {number} depth Requested conversion depth.
+ * @param {'FDM'|'SLA'} technology Requested technology.
+ * @param {string[]} filesCleanupList Cleanup collector.
+ * @returns {Promise<{processableFile: string, originalModelInfo: {x: number, y: number, z: number, height_mm: number}}>} Preprocessing result.
+ */
+async function prepareProcessableModel(inputFile, depth, technology, filesCleanupList) {
+    let processableFile = inputFile;
+    if (path.extname(processableFile).toLowerCase() === '.zip') {
+        processableFile = await extractFirstSupportedFromZip(inputFile, filesCleanupList);
+    }
+
+    processableFile = await convertInputToStl(processableFile, depth, filesCleanupList);
+    processableFile = await tryOptimizeOrientation(processableFile, technology, filesCleanupList);
+
+    const originalModelInfo = await getModelInfo(processableFile);
+    return {
+        processableFile,
+        originalModelInfo
+    };
+}
+
+/**
+ * Calculate request pricing for parsed print stats.
+ * @param {'FDM'|'SLA'} technology Active print technology.
+ * @param {string} material Material key.
+ * @param {{print_time_seconds: number}} stats Parsed print stats.
+ * @returns {{hourlyRate: number, totalPrice: number}} Pricing result.
+ */
+function calculateSlicePricing(technology, material, stats) {
+    const hourlyRate = getRate(technology, material);
+    const printHours = stats.print_time_seconds / 3600;
+    const calcHours = Math.max(printHours, 0.25);
+    const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10;
+
+    return {
+        hourlyRate,
+        totalPrice
+    };
+}
+
+/**
+ * Build successful slice response payload.
+ * @param {{
+ * engine: 'prusa'|'orca',
+ * technology: 'FDM'|'SLA',
+ * material: string,
+ * infillPercentage: string,
+ * orcaMachineConfigFile: string | null,
+ * baseConfigFile: string,
+ * transformOptions: {unit: 'mm'|'inch', scalePercent: number | null},
+ * transformPlan: {keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, scale: {x: number, y: number, z: number}, rotationDeg: {x: number, y: number, z: number}},
+ * originalModelInfo: {x: number, y: number, z: number},
+ * modelBoundsValidation: {dimensions: {x: number, y: number, z: number}},
+ * buildVolumeLimits: {min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number}, sourceProfile: string},
+ * stats: {print_time_seconds: number, print_time_readable: string, material_used_m: number, object_height_mm: number, estimated_price_huf: number}
+ * }} context Response context.
+ * @returns {Record<string, unknown>} API response payload.
+ */
+function buildSliceSuccessResponse(context) {
+    const {
+        engine,
+        technology,
+        material,
+        infillPercentage,
+        orcaMachineConfigFile,
+        baseConfigFile,
+        transformOptions,
+        transformPlan,
+        originalModelInfo,
+        modelBoundsValidation,
+        buildVolumeLimits,
+        stats
+    } = context;
+
+    const { hourlyRate, totalPrice } = calculateSlicePricing(technology, material, stats);
+
+    return {
+        success: true,
+        slicer_engine: engine,
+        technology,
+        material,
+        infill: infillPercentage,
+        profiles: engine === 'orca'
+            ? {
+                machine_profile: path.basename(orcaMachineConfigFile),
+                process_profile: path.basename(baseConfigFile)
+            }
+            : {
+                prusa_profile: path.basename(baseConfigFile)
+            },
+        model_transform: {
+            size_unit: transformOptions.unit,
+            keep_proportions: transformPlan.keepProportions,
+            requested_size: {
+                x: transformPlan.requestedTargetSize.x === null ? null : roundToThree(transformPlan.requestedTargetSize.x),
+                y: transformPlan.requestedTargetSize.y === null ? null : roundToThree(transformPlan.requestedTargetSize.y),
+                z: transformPlan.requestedTargetSize.z === null ? null : roundToThree(transformPlan.requestedTargetSize.z)
+            },
+            scale_percent: transformOptions.scalePercent,
+            scale_factors: roundDimensions(transformPlan.scale),
+            rotation_deg: roundDimensions(transformPlan.rotationDeg),
+            original_dimensions_mm: roundDimensions({
+                x: originalModelInfo.x,
+                y: originalModelInfo.y,
+                z: originalModelInfo.z
+            }),
+            final_dimensions_mm: roundDimensions(modelBoundsValidation.dimensions)
+        },
+        build_volume_limits_mm: {
+            min: roundDimensions(buildVolumeLimits.min),
+            max: roundDimensions(buildVolumeLimits.max),
+            source_profile: buildVolumeLimits.sourceProfile
+        },
+        hourly_rate: hourlyRate,
+        stats: {
+            ...stats,
+            estimated_price_huf: totalPrice
+        }
+    };
+}
+
+/**
  * Execute full slicing pipeline for one request.
  * @param {import('express').Request} req Express request.
  * @param {import('express').Response} res Express response.
@@ -91,12 +244,7 @@ async function processSlice(req, res, options = {}) {
     const filesCleanupList = [];
 
     if (!isSupportedInputExtension(originalExt)) {
-        cleanupFiles([inputFile]);
-        return res.status(400).json({
-            success: false,
-            error: `Unsupported file format. Supported file extensions: ${getSupportedInputExtensionsText()}`,
-            errorCode: 'UNSUPPORTED_FILE_FORMAT'
-        });
+        return createUnsupportedFormatResponse(res, inputFile);
     }
 
     const parsedRequest = parseSliceOptions(req.body, forcedTechnology, engine);
@@ -115,20 +263,15 @@ async function processSlice(req, res, options = {}) {
     console.log(`[INFO] Request: ${originalName} | Tech: ${technology} | Mat: ${material}`);
 
     try {
-        const tempFileWithExt = inputFile + originalExt;
-        fs.renameSync(inputFile, tempFileWithExt);
-        inputFile = tempFileWithExt;
-        filesCleanupList.push(inputFile);
+        inputFile = appendOriginalExtensionToUpload(inputFile, originalExt, filesCleanupList);
 
-        let processableFile = inputFile;
-        if (path.extname(processableFile).toLowerCase() === '.zip') {
-            processableFile = await extractFirstSupportedFromZip(inputFile, filesCleanupList);
-        }
+        let { processableFile, originalModelInfo } = await prepareProcessableModel(
+            inputFile,
+            depth,
+            technology,
+            filesCleanupList
+        );
 
-        processableFile = await convertInputToStl(processableFile, depth, filesCleanupList);
-        processableFile = await tryOptimizeOrientation(processableFile, technology, filesCleanupList);
-
-        const originalModelInfo = await getModelInfo(processableFile);
         const outputFilename = buildOutputFilename(originalName, technology);
         const outputPath = path.join(OUTPUT_DIR, outputFilename);
 
@@ -191,56 +334,23 @@ async function processSlice(req, res, options = {}) {
             engine
         );
 
-        const hourlyRate = getRate(technology, material);
-        const printHours = stats.print_time_seconds / 3600;
-        const calcHours = Math.max(printHours, 0.25);
-        const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10;
-
-        cleanupFiles(filesCleanupList);
-
-        return res.json({
-            success: true,
-            slicer_engine: engine,
+        const responsePayload = buildSliceSuccessResponse({
+            engine,
             technology,
             material,
-            infill: infillPercentage,
-            profiles: engine === 'orca'
-                ? {
-                    machine_profile: path.basename(orcaMachineConfigFile),
-                    process_profile: path.basename(baseConfigFile)
-                }
-                : {
-                    prusa_profile: path.basename(baseConfigFile)
-                },
-            model_transform: {
-                size_unit: transformOptions.unit,
-                keep_proportions: transformPlan.keepProportions,
-                requested_size: {
-                    x: transformPlan.requestedTargetSize.x === null ? null : roundToThree(transformPlan.requestedTargetSize.x),
-                    y: transformPlan.requestedTargetSize.y === null ? null : roundToThree(transformPlan.requestedTargetSize.y),
-                    z: transformPlan.requestedTargetSize.z === null ? null : roundToThree(transformPlan.requestedTargetSize.z)
-                },
-                scale_percent: transformOptions.scalePercent,
-                scale_factors: roundDimensions(transformPlan.scale),
-                rotation_deg: roundDimensions(transformPlan.rotationDeg),
-                original_dimensions_mm: roundDimensions({
-                    x: originalModelInfo.x,
-                    y: originalModelInfo.y,
-                    z: originalModelInfo.z
-                }),
-                final_dimensions_mm: roundDimensions(modelBoundsValidation.dimensions)
-            },
-            build_volume_limits_mm: {
-                min: roundDimensions(buildVolumeLimits.min),
-                max: roundDimensions(buildVolumeLimits.max),
-                source_profile: buildVolumeLimits.sourceProfile
-            },
-            hourly_rate: hourlyRate,
-            stats: {
-                ...stats,
-                estimated_price_huf: totalPrice
-            }
+            infillPercentage,
+            orcaMachineConfigFile,
+            baseConfigFile,
+            transformOptions,
+            transformPlan,
+            originalModelInfo,
+            modelBoundsValidation,
+            buildVolumeLimits,
+            stats
         });
+
+        cleanupFiles(filesCleanupList);
+        return res.json(responsePayload);
     } catch (err) {
         return handleProcessingError(err, res, filesCleanupList, inputFile, getSupportedInputExtensionsText);
     }

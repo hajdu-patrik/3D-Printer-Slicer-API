@@ -66,6 +66,20 @@ function enqueueSliceJob(task) {
     });
 }
 
+/**
+ * Get current queue status for health check diagnostics.
+ * @returns {{queueLength: number, activeJobs: number, maxConcurrent: number, maxQueueLength: number}}
+ */
+function getQueueStatus() {
+    return {
+        queueLength: sliceQueue.length,
+        activeJobs: activeSliceJobs,
+        maxConcurrent: MAX_CONCURRENT_SLICES,
+        maxQueueLength: MAX_SLICE_QUEUE_LENGTH
+    };
+}
+
 module.exports = {
-    enqueueSliceJob
+    enqueueSliceJob,
+    getQueueStatus
 };

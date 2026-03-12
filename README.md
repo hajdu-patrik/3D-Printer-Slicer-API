@@ -401,3 +401,12 @@ You can customize pricing, security, and slicing behavior without changing endpo
 ## 📦 Release Log
 
 Detailed version history is maintained in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## ❤️ Sponsor Options
+
+If this project helps your workflow, you can support ongoing development here:
+
+- Buy Me a Coffee: https://www.buymeacoffee.com/3D.Printer.Slicer.API
+- GitHub Sponsors: https://github.com/sponsors/hajdu-patrik

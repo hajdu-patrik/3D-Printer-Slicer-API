@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.3 (2026-03-12)
+
+### Added
+
+- Added comprehensive `GET /health/detailed` endpoint for subsystem diagnostics:
+  - returns slicer configuration availability (Prusa, Orca paths)
+  - checks Python subprocess availability and version string
+  - reports queue status (length, active jobs, concurrency limits)
+  - HTTP `200 OK` when all subsystems healthy, `503 DEGRADED` on failure
+  - includes timestamp, uptime, and detailed subsystem breakdown
+- Added `requirements.lock` file with pinned Python package versions for reproducible builds:
+  - captures exact trimesh, numpy, manifold3d, and geometry library versions
+- Enhanced `.env.example` with comprehensive documentation:
+  - ADMIN_API_KEY, PORT, body limits, rate limiting, queue configuration
+  - Python path override, logging level, optional feature flags
+
+### Changed
+
+- Hardened dependency security via `npm audit fix`:
+  - resolved high-severity multer vulnerability (DoS via incomplete cleanup and resource exhaustion)
+  - updated multer from `<=2.1.0` to latest patched version
+- Exported `getQueueStatus()` function from `app/services/slice/queue.js` for health check integration
+
+### Validation
+
+- Verified `/health` endpoint returns uptime (existing behavior preserved)
+- Verified `/health/detailed` endpoint:
+  - returns `HTTP 200` with `status: OK` when all subsystems available
+  - returns `HTTP 503` with `status: DEGRADED` when Python subprocess unavailable (expected Windows condition)
+  - includes valid queue status reporting (length, active jobs, limits)
+  - includes valid slicer path and storage directory checks
+
 ## v3.0.2 (2026-03-65)
 
 ### Changed

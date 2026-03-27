@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.4 (2026-03-27)
+
+### Added
+
+- Added clean `requirements.txt` to root for dedicated Python runtime dependency tracking:
+  - specifically targets geometry and image processing dependencies (`trimesh`, `numpy`, `Pillow`, `shapely`, `ezdxf`, `svg.path`, `numpy-stl`)
+  - enables reliable Docker caching for the Python layer
+
+### Changed
+
+- Deeply optimized `Dockerfile` for size, security, and build speed (2026 DevOps Best Practices):
+  - merged system dependencies (`apt-get`) and locale generation into a single layer
+  - eliminated `chown -R` duplication by using `COPY --chown=slicer:slicer` for massive size reduction
+  - enforced Read-Only dependencies: `/opt/venv` and `node_modules` remain root-owned for security
+  - aggregated aggressive cleanup (removal of `npm`, `curl`, `gnupg`, manpages) into a single final layer
+  - reorganized user creation (`slicer`) to the beginning of the runtime stage
+- Restructured `docker-compose.yml` and `server.js` runtime paths for "Agentic" workflows:
+  - redirected all intermediate conversion/extraction files to `uploads/help-files/` to maintain a clean root `uploads/` directory
+  - implemented strict cleanup logic ensuring `help-files/` is emptied immediately after slicing
+- Cleaned up Python scripts (`img2stl.py`, `vector2stl.py`) for SonarLint and Pylance compliance:
+  - removed unused variables and implicit imports
+  - tightened exception handling with specific classes (e.g., `ValueError`)
+
+### Removed
+
+- Removed `requirements.lock` from the root directory:
+  - eliminated documentation-specific (MkDocs) dependencies from the production build path to prevent bloatware
+
 ## v3.0.3 (2026-03-12)
 
 ### Added

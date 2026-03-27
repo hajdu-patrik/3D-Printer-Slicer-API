@@ -20,11 +20,15 @@ venv/
 *.swp
 .DS_Store
 
-# Runtime output
-input/**
-!input/.gitkeep
-output/**
+# AI Agent Test Reports
+tests/testing-scripts/results/*.md
+!tests/testing-scripts/results/.gitkeep
+
+# System output
+output/*
 !output/.gitkeep
+input/*
+!input/.gitkeep
 
 # Test assets (publish runners, keep heavy sample files private)
 tests/testing-files/**

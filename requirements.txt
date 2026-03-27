@@ -1,0 +1,7 @@
+trimesh[easy]
+numpy
+Pillow
+shapely
+ezdxf
+svg.path
+numpy-stl

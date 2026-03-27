@@ -328,19 +328,43 @@ Common slicing error responses:
 
 ## 🔏 Learn how to setup the `.env`, configs, input/output
 
-1. Create your env file from template:
+#### 1. Create your env file from template:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Set at least `ADMIN_API_KEY` in `.env`.
+#### 2. Create your pricing configuration file from the template:
 
-3. Start the app:
+```bash
+cp configs/pricing.example.json configs/pricing.json
+```
+
+*Default `pricing.example.json` structure:*
+
+```json
+{
+  "FDM": {
+    "PLA": 1000,
+    "ABS": 1000,
+    "PETG": 1100,
+    "TPU": 1100
+  },
+  "SLA": {
+    "Standard": 2000,
+    "ABS-Like": 2000,
+    "Flexible": 2800
+  }
+}
+```
+
+#### 3. Set at least `ADMIN_API_KEY` in `.env`.
+
+#### 4. Start the app:
   - local: `npm start`
   - docker: `docker compose up -d --build`
 
-4. The app now reads `.env` automatically on local startup via `dotenv`, and Docker reads it via `env_file`.
+#### 5. The app now reads `.env` automatically on local startup via `dotenv`, and Docker reads it via `env_file`.
 
 ### Runtime folders used by the program
 

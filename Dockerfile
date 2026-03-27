@@ -1,4 +1,6 @@
+# ==============================================================================
 # Stage 1: Builder - Ubuntu 24.04 + Node.js + Python deps
+# ==============================================================================
 FROM ubuntu:24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -14,41 +16,38 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
+# Setup Node.js repo and install builder deps
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg \
-        python3 \
-        python3-venv \
+        ca-certificates curl gnupg python3 python3-venv \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
         > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends nodejs
 
+# Build Python venv
 RUN python3 -m venv "$VIRTUAL_ENV"
-
 COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip setuptools wheel \
     && pip install -r requirements.txt
 
+# Install Node dependencies
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --no-audit --no-fund
 
+# ==============================================================================
 # Stage 2: Runtime slicers - extract AppImages
+# ==============================================================================
 FROM ubuntu:24.04 AS slicer-base
 
 ENV DEBIAN_FRONTEND=noninteractive
-
 WORKDIR /tmp
 
 ARG PRUSA_APPIMAGE_URL="https://github.com/prusa3d/PrusaSlicer/releases/download/version_2.8.1/PrusaSlicer-2.8.1+linux-x64-newer-distros-GTK3-202409181416.AppImage"
@@ -57,9 +56,7 @@ ARG ORCA_APPIMAGE_URL="https://github.com/OrcaSlicer/OrcaSlicer/releases/downloa
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        wget \
+    && apt-get install -y --no-install-recommends ca-certificates wget \
     && wget -q "$PRUSA_APPIMAGE_URL" -O PrusaSlicer.AppImage \
     && chmod +x PrusaSlicer.AppImage \
     && ./PrusaSlicer.AppImage --appimage-extract \
@@ -67,11 +64,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && wget -q "$ORCA_APPIMAGE_URL" -O OrcaSlicer.AppImage \
     && chmod +x OrcaSlicer.AppImage \
     && ./OrcaSlicer.AppImage --appimage-extract \
-    && mv squashfs-root orca-squashfs-root \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && mv squashfs-root orca-squashfs-root
 
-# Stage 3: Final runtime - Ubuntu 24.04
+# ==============================================================================
+# Stage 3: Final runtime - Ubuntu 24.04 (Optimized for size & security)
+# ==============================================================================
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -85,24 +82,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
+# 1. Create unprivileged user first
+RUN groupadd --system slicer \
+    && useradd --system --gid slicer --create-home --home-dir /home/slicer --shell /usr/sbin/nologin slicer
+
+# 2. Install all runtime dependencies, Node.js, and perform aggressive cleanup in ONE layer
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg \
-        python3 \
-        libglu1-mesa \
-        libgtk-3-0 \
-        libegl1 \
-        libwebkit2gtk-4.1-0 \
-        libosmesa6 \
-        libxft2 \
-        libxinerama1 \
-        libgeos-c1t64 \
-        pstoedit \
-        ghostscript \
+        ca-certificates curl gnupg python3 \
+        libglu1-mesa libgtk-3-0 libegl1 libwebkit2gtk-4.1-0 \
+        libosmesa6 libxft2 libxinerama1 libgeos-c1t64 pstoedit ghostscript \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
@@ -110,32 +101,31 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /usr/lib/node_modules/npm \
-    && rm -f /usr/bin/npm /usr/bin/npx /usr/bin/corepack \
     && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /usr/lib/node_modules/npm /usr/bin/npm /usr/bin/npx /usr/bin/corepack \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc/* /usr/share/man/* /tmp/*
 
-COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /app/node_modules ./node_modules
-
+# 3. Copy extracted slicers (Owned by root - slicer user only needs execute permissions)
 COPY --from=slicer-base /tmp/prusa-squashfs-root /opt/prusaslicer
 COPY --from=slicer-base /tmp/orca-squashfs-root /opt/orcaslicer
 RUN ln -sf /opt/prusaslicer/AppRun /usr/local/bin/prusa-slicer \
-    && ln -sf /opt/orcaslicer/AppRun /usr/local/bin/orca-slicer \
-    && groupadd --system slicer \
-    && useradd --system --gid slicer \
-        --create-home --home-dir /home/slicer \
-        --shell /usr/sbin/nologin \
-        --comment "PrusaSlicer runtime user" \
-        slicer \
-    && mkdir -p /app/input /app/output /home/slicer \
-    && chown -R slicer:slicer /app/input /app/output /home/slicer
+    && ln -sf /opt/orcaslicer/AppRun /usr/local/bin/orca-slicer
 
-COPY --from=builder /app/package.json /app/package-lock.json ./
-COPY app/ ./
-COPY configs/ ./configs/
+# 4. Copy dependencies (Owned by root - highly secure, read-only for app)
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app/node_modules ./node_modules
 
+# 5. Copy Application code and configs (Owned by slicer)
+COPY --chown=slicer:slicer app/ ./
+COPY --chown=slicer:slicer configs/ ./configs/
+COPY --chown=slicer:slicer package.json package-lock.json ./
+
+# 6. Create runtime directories with exact ownership
+RUN mkdir -p /app/input /app/output \
+    && chown slicer:slicer /app/input /app/output
+
+# Switch to safe user
 USER slicer
 
 EXPOSE 3000

@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: 3d-printer-slicer-api:latest
-    container_name: 3d-printer-slicer-api-backend-server
+    image: 3d-psa:latest
+    container_name: 3d-psa-backend-server
     user: ${SLICER_CONTAINER_USER:-0:0}
     env_file:
       - .env
@@ -37,7 +37,7 @@ services:
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    container_name: 3d-printer-slicer-monitoring
+    container_name: 3d-psa-monitoring
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:3001:3001"

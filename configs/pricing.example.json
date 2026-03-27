@@ -1,0 +1,13 @@
+{
+  "FDM": {
+    "PLA": 1000,
+    "ABS": 1000,
+    "PETG": 1100,
+    "TPU": 1100
+  },
+  "SLA": {
+    "Standard": 2000,
+    "ABS-Like": 2000,
+    "Flexible": 2800
+  }
+}

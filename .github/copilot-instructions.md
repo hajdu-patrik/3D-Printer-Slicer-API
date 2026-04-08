@@ -1,29 +1,134 @@
-# 3D Printer Slicer API - System Context & Agent Instructions
+# 3D Printer Slicer API - Copilot Instructions
 
-## 1. Architecture & Stack
-- **Backend:** Node.js (Express) + Python 3.12.
-- **Engines:** PrusaSlicer (for FDM & SLA) and OrcaSlicer (for FDM only).
-- **Core Pattern:** Dual independent endpoints (`/prusa/slice` and `/orca/slice`).
-- **Data Flow:** Accept file -> Validate -> Queue (FIFO) -> Orient (Python) -> Slice (Prusa/Orca) -> Return Pricing/Stats.
+Last synchronized: 2026-04-07
 
-## 2. Strict Technical Constraints (MUST FOLLOW)
-- **Directory Structure:** All runtime folders (`input/`, `output/`, `configs/`) are STRICTLY ROOT-SCOPED. Do NEVER use `app/input`, `app/output`, or `app/configs`.
-- **API Security:** All admin endpoints (Pricing modifications, `GET /admin/output-files`) require the `x-api-key` header matching `ADMIN_API_KEY` from `.env`.
-- **Model Integrity:** NEVER suggest auto-healing or shape-correcting invalid/non-printable source data. The policy is "fail-fast" with `INVALID_SOURCE_GEOMETRY`.
-- **Rate Limiting & Queueing:** CPU-heavy requests are queued. Avoid suggesting concurrent heavy requests without handling HTTP 429 and Retry-After logic.
+## Architecture Notice
+This project uses both GitHub Copilot and Claude as primary agentic tools.
+If architecture/domain rules change in this file, synchronize changes in:
+- CLAUDE.md
+- .claude/CLAUDE.md
+- .github/skills/*
+- .claude/skills/*
+- .github/instructions/*
 
-## 3. Supported Parameters & Workflows
-- Prusa layer heights: `0.025`, `0.05` (SLA); `0.1`, `0.2`, `0.3` (FDM).
-- Orca layer heights: `0.1`, `0.2`, `0.3` (FDM only).
-- Orca relies on matching Machine & Process profiles (`printerProfile`, `processProfile`).
-- Pricing relies on `configs/pricing.json`.
+## Goal
+Provide a stable and secure slicing API with strict fail-fast validation and production-safe queue controls.
 
-## 4. Agent Operational Directives
-- If writing tests, append to `tests/testing-scripts/`. Write reports to `results/`.
-- If debugging deployment, rely on `docker-compose.yml` and explicitly check `$SLICER_CONTAINER_USER` permissions.
-- Do not hallucinate package installations; always check `package.json` or `requirements.txt` first.
+## Technology Baseline
+- Backend: Node.js + Express
+- Processing: Python 3.12
+- Engines: PrusaSlicer (FDM and SLA), OrcaSlicer (FDM only)
+- Runtime: Docker Compose
 
-## 5. Agent Skills (Slash Commands)
-To perform operations safely, you MUST use the provided agent skills located in the `.agents/skills/` directory. 
-- Use the `/docker` command (see `.agents/skills/slicer-docker-ops/SKILL.md`) for ANY container lifecycle management.
-- Use the `/test` command (see `.agents/skills/slicer-api-testing/SKILL.md`) to run regression matrices and validate your code changes. Always read the generated report afterward.
+## Repository Surface
+- app/: server bootstrap, routes, middleware, services, python converters
+- configs/: pricing and slicer profile configuration
+- input/: temporary request input workspace
+- output/: generated .gcode/.sl1 artifacts
+- tests/testing-scripts/: Python integration tests and report generation
+- .github/: CI workflow + Copilot instructions + skill mirrors + instruction overlays
+
+## Runtime Flow
+Accept upload -> validate options -> rate limit -> queue -> convert/orient -> transform -> slice -> parse stats -> compute pricing -> return response.
+
+## Endpoint Snapshot
+Public:
+- GET /health
+- GET /health/detailed
+- GET /pricing
+- POST /prusa/slice
+- POST /orca/slice
+- GET /openapi.json
+- GET /docs
+- GET /
+
+Admin protected (x-api-key):
+- POST /pricing/FDM
+- POST /pricing/SLA
+- PATCH /pricing/:technology/:material
+- DELETE /pricing/:technology/:material
+- GET /admin/output-files
+
+## Non-negotiable Constraints
+- Keep runtime folders root-scoped: input/, output/, configs/.
+- Never use app/input, app/output, or app/configs.
+- Keep fail-fast policy for invalid geometry (INVALID_SOURCE_GEOMETRY).
+- Never suggest auto-healing source models.
+- Preserve queue and rate-limit protections for slicing endpoints.
+
+## Queue and Rate Defaults
+- 3 requests / 60s / IP for slicing routes
+- MAX_CONCURRENT_SLICES default: 1
+- MAX_SLICE_QUEUE_LENGTH default: 100
+- MAX_SLICE_QUEUE_WAIT_MS default: 300000
+- Slice command timeout default: 600000 ms
+
+## Engine Boundaries
+Prusa:
+- Layer heights: 0.025, 0.05, 0.1, 0.2, 0.3
+- SLA inferred for 0.025 and 0.05
+
+Orca:
+- FDM only
+- Layer heights: 0.1, 0.2, 0.3
+- Machine/process profile compatibility is mandatory
+
+## Security Rules
+- ADMIN_API_KEY must be present at startup.
+- Admin routes require x-api-key equal to ADMIN_API_KEY.
+
+## Preferred Skills
+Skills (thin command references pointing to agent definitions):
+- .github/skills/docker-ops/SKILL.md
+- .github/skills/testing/SKILL.md
+- .github/skills/docs-sync/SKILL.md
+
+## Agent Definitions
+Mirrored in `.github/agents/` and `.claude/agents/`:
+- orchestrator — plans multi-domain tasks and delegates to sub-agents in parallel
+- js-developer — Node.js + Express code in app/
+- python-developer — Python converters, orientation, scaling scripts
+- test-engineer — Python integration test runners and reports
+- docs-syncer — documentation and instruction file synchronization
+- docker-specialist — Dockerfile, docker-compose, container lifecycle
+
+For multi-domain tasks, use the orchestrator agent workflow to plan and delegate.
+
+## Test Execution Rule
+After every test run, read the generated markdown report under tests/testing-scripts/results/ before concluding.
+
+## Environment and Config Keys
+- ADMIN_API_KEY
+- JSON_BODY_LIMIT
+- FORM_BODY_LIMIT
+- MAX_UPLOAD_BYTES
+- SLICE_RATE_LIMIT_WINDOW_MS
+- SLICE_RATE_LIMIT_MAX_REQUESTS
+- MAX_CONCURRENT_SLICES
+- MAX_SLICE_QUEUE_LENGTH
+- MAX_SLICE_QUEUE_WAIT_MS
+- MAX_ZIP_ENTRIES
+- MAX_ZIP_UNCOMPRESSED_BYTES
+- SLICE_COMMAND_TIMEOUT_MS
+- ORCA_MACHINE_PROFILE
+- ORCA_PROCESS_PROFILE_0_1
+- ORCA_PROCESS_PROFILE_0_2
+- ORCA_PROCESS_PROFILE_0_3
+
+## Documentation Layout
+Global:
+- .github/copilot-instructions.md
+- CLAUDE.md
+- .claude/CLAUDE.md
+
+Folder-local:
+- app/CLAUDE.md
+- configs/CLAUDE.md
+- tests/testing-scripts/CLAUDE.md
+
+Instruction overlays:
+- .github/instructions/repository.instructions.md
+- .github/instructions/app.instructions.md
+- .github/instructions/configs.instructions.md
+- .github/instructions/testing-scripts.instructions.md
+- .github/instructions/github.instructions.md

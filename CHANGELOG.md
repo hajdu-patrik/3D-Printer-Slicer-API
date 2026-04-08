@@ -2,6 +2,52 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.0.5 (2026-04-08)
+
+### Added
+
+- Added agentic orchestration workflow with 6 specialized agent definitions:
+  - `orchestrator` — plans multi-domain tasks and delegates to parallel sub-agents
+  - `js-developer` — owns Node.js + Express code in `app/`
+  - `python-developer` — owns Python converters, orientation, and scaling scripts
+  - `test-engineer` — owns Python integration test runners and report generation
+  - `docs-syncer` — owns all documentation and instruction file synchronization
+  - `docker-specialist` — owns Dockerfile, docker-compose, and container lifecycle
+- Agent definitions mirrored in `.claude/agents/` and `.github/agents/`
+- Added folder-local `CLAUDE.md` instruction files:
+  - `app/CLAUDE.md` — app folder structure, endpoint behavior, local rules
+  - `configs/CLAUDE.md` — config folder scope, safety constraints, related env keys
+  - `tests/testing-scripts/CLAUDE.md` — test runner groups, shared helpers, reporting contract
+- Added Copilot instruction overlays for folder-scoped context:
+  - `.github/instructions/repository.instructions.md`
+  - `.github/instructions/app.instructions.md`
+  - `.github/instructions/configs.instructions.md`
+  - `.github/instructions/testing-scripts.instructions.md`
+  - `.github/instructions/github.instructions.md`
+
+### Changed
+
+- Restructured skill files (`docker-ops`, `testing`, `docs-sync`) into thin command references that point to their corresponding agent definitions for full context
+- Migrated orchestration from skill to agent definition (`.claude/agents/orchestrator.md`)
+- Rewrote `.claude/CLAUDE.md` and `.github/copilot-instructions.md` from legacy format to standardized multi-agent instruction structure with endpoint snapshots, engine constraints, queue defaults, skill/agent routing, and documentation topology
+- Added `GET /`, `GET /health/detailed`, `GET /openapi.json`, `GET /docs` to Copilot and Claude instruction endpoint lists (were missing)
+- Added missing environment keys to `.github/copilot-instructions.md`: `JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, `MAX_UPLOAD_BYTES`, `MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`
+
+### Fixed
+
+- Fixed README Node.js badge version: `24.11.1` → `20.x` (matches Dockerfile NodeSource repo)
+- Fixed README `MAX_UPLOAD_BYTES` default: `250MB` → `100MB` (matches `constants.js`)
+- Fixed README `MAX_ZIP_UNCOMPRESSED_BYTES` default: `250MB` → `500MB` (matches `zip.js`)
+- Fixed README missing public endpoints: added `GET /health/detailed`, `GET /openapi.json`, `GET /docs`
+- Fixed Dockerfile HEALTHCHECK misalignment with docker-compose.yml: `start_period` `5s` → `30s`, `retries` `3` → `5`
+
+### Removed
+
+- Removed legacy `.agents/skills/` directory (replaced by `.claude/agents/` and `.github/agents/`)
+- Removed `AGENTS.md` (replaced by agent definitions in agents/ folders)
+- Removed stale references to `.github/CLAUDE.md` (file never existed) from all instruction files
+- Removed stale references to `.agents/skills/` from all instruction files
+
 ## v3.0.4 (2026-03-27)
 
 ### Added

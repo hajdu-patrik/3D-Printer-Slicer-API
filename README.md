@@ -1,6 +1,6 @@
 <img width="2048" height="2048" alt="API-LOGO" src="https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a" />
 
-![Node.js](https://img.shields.io/badge/Node.js-24.11.1-339933?style=flat&logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=flat&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Backend-Express_4.18.2-000000?style=flat&logo=express&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
 ![PrusaSlicer](https://img.shields.io/badge/Slicer-PrusaSlicer_2.8.1-orange?style=flat)
@@ -55,9 +55,12 @@ Public endpoints do not require admin key.
 ### Public
 
 - `GET /health`
+- `GET /health/detailed`
 - `GET /pricing`
 - `POST /prusa/slice`
 - `POST /orca/slice`
+- `GET /openapi.json`
+- `GET /docs`
 
 ### Admin-protected
 
@@ -406,8 +409,8 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`).
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
-- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `250MB`).
-- **ZIP Safety Limits:** ZIP extraction is guarded by max entries and max cumulative extracted size (`MAX_ZIP_ENTRIES`, `MAX_ZIP_UNCOMPRESSED_BYTES`, default `250MB`).
+- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `100MB`).
+- **ZIP Safety Limits:** ZIP extraction is guarded by max entries (`MAX_ZIP_ENTRIES`, default `200`) and max cumulative extracted size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.

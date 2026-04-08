@@ -1,6 +1,6 @@
 # App Folder - Local Claude Guide
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Scope
 This document describes the application runtime inside app/.
@@ -8,10 +8,10 @@ This document describes the application runtime inside app/.
 ## Structure and Responsibilities
 - app/server.js
   - Express bootstrap
-  - Middleware registration (cors, body parser)
+  - Middleware registration (helmet, cors, body parser, global error handler)
   - Swagger/OpenAPI endpoints
   - Route registration
-  - Static output download exposure
+  - JSON catch-all for unknown routes
 
 - app/config/
   - constants.js: defaults, layer presets, limits, extensions
@@ -20,11 +20,12 @@ This document describes the application runtime inside app/.
 - app/routes/
   - slice.routes.js: /prusa/slice and /orca/slice
   - pricing.routes.js: /pricing and admin pricing mutations
-  - system.routes.js: /health, /health/detailed, /admin/output-files, favicon
+  - system.routes.js: /health, /health/detailed, /admin/output-files, /admin/download/:fileName, favicon
 
 - app/middleware/
-  - rateLimit.js: in-memory per-IP limiter for slicing
-  - requireAdmin.js: x-api-key auth for admin endpoints
+  - rateLimit.js: in-memory per-IP limiter for slicing with periodic expired-bucket cleanup (shared client IP resolver)
+  - requireAdmin.js: x-api-key auth for admin endpoints (timing-safe comparison + shared client IP logs)
+  - errorHandler.js: global Express error handler for CORS, parse, limit, and multer errors
 
 - app/services/
   - pricing.service.js: load/normalize/save pricing map
@@ -42,11 +43,17 @@ This document describes the application runtime inside app/.
 - app/utils/logger.js
   - error logging helper for processing failures
 
+- app/utils/client-ip.js
+  - shared client IP resolver; only trusts X-Forwarded-For when TRUST_PROXY=true
+
 ## Endpoint Behavior Notes
-- Upload field name must stay choosenFile.
+- Upload field name must stay choosenFile (multer single-file mode with extension filter).
 - /prusa/slice allows FDM and SLA based on layerHeight.
 - /orca/slice is FDM-only and profile compatibility aware.
-- On unsupported routes, server redirects to /docs.
+- /orca/slice resolves generated output from per-request isolated output directory before final filename alignment.
+- /health/detailed requires admin API key (exposes subsystem diagnostics).
+- /admin/download/:fileName requires valid admin API key.
+- Unsupported routes return JSON 404 with ROUTE_NOT_FOUND.
 
 ## Local Rules
 - Keep route handlers thin; put logic in services/.

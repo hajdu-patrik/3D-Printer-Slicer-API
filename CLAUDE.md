@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -41,7 +41,6 @@ Do not introduce app/input, app/output, or app/configs.
 ## API Endpoint Snapshot
 Public endpoints:
 - GET /health
-- GET /health/detailed
 - GET /pricing
 - POST /prusa/slice
 - POST /orca/slice
@@ -50,18 +49,23 @@ Public endpoints:
 - GET /
 
 Admin-protected endpoints (x-api-key required):
+- GET /health/detailed
 - POST /pricing/FDM
 - POST /pricing/SLA
 - PATCH /pricing/:technology/:material
 - DELETE /pricing/:technology/:material
 - GET /admin/output-files
-
-Operational/static endpoint:
-- GET /download/:fileName (served from output/)
+- GET /admin/download/:fileName
 
 ## Security and Validation Rules
 - ADMIN_API_KEY must exist or server startup is refused.
 - Admin operations must pass x-api-key header matching ADMIN_API_KEY.
+- Admin API key comparison uses crypto.timingSafeEqual (constant-time).
+- Admin authorization logging resolves client IP with forwarded-header-aware parsing (requires TRUST_PROXY=true).
+- X-Forwarded-For is only trusted when TRUST_PROXY=true is explicitly configured.
+- Browser-origin requests to /admin/* must match ADMIN_CORS_ALLOWED_ORIGINS.
+- Shell commands use execFile with argument arrays (no shell interpolation).
+- Upload accepts only a single file on choosenFile field with extension validation at upload time.
 - Fail-fast geometry policy: invalid geometry returns INVALID_SOURCE_GEOMETRY.
 - No automatic model healing/correction is allowed.
 
@@ -88,10 +92,13 @@ Orca:
 - FDM only
 - Allowed layer heights: 0.1, 0.2, 0.3
 - Requires machine profile + process profile compatibility
+- Uses per-request isolated output directories before final artifact alignment.
 
 ## Configuration Keys
 Core keys from .env:
 - ADMIN_API_KEY
+- PORT
+- ADMIN_CORS_ALLOWED_ORIGINS
 - JSON_BODY_LIMIT
 - FORM_BODY_LIMIT
 - MAX_UPLOAD_BYTES
@@ -107,6 +114,7 @@ Core keys from .env:
 - ORCA_PROCESS_PROFILE_0_1
 - ORCA_PROCESS_PROFILE_0_2
 - ORCA_PROCESS_PROFILE_0_3
+- TRUST_PROXY
 
 ## Testing Policy
 Use Python test runners in tests/testing-scripts/.

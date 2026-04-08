@@ -473,11 +473,12 @@ function logEngineProfileSelection(engine, orcaMachineConfigFile, baseConfigFile
 /**
  * Apply engine-specific post-processing cleanup.
  * @param {'prusa'|'orca'} engine Slicer engine key.
+ * @param {string} [metadataDir=OUTPUT_DIR] Directory containing engine metadata.
  * @returns {void}
  */
-function finalizeEngineMetadata(engine) {
+function finalizeEngineMetadata(engine, metadataDir = OUTPUT_DIR) {
     if (engine === 'orca') {
-        cleanupOrcaResultMetadata(OUTPUT_DIR);
+        cleanupOrcaResultMetadata(metadataDir);
     }
 }
 

@@ -9,7 +9,7 @@ const DEFAULTS = {
     PORT: 3000,
     JSON_BODY_LIMIT: '1mb',
     FORM_BODY_LIMIT: '1mb',
-    MAX_UPLOAD_BYTES: 100 * 1024 * 1024,
+    MAX_UPLOAD_BYTES: 500 * 1024 * 1024,
     MAX_LOG_OUTPUT: 4000,
     SLICE_COMMAND_TIMEOUT_MS: 600000,
     SLICE_TIMEOUT_MINUTES: 10,
@@ -18,6 +18,8 @@ const DEFAULTS = {
     MAX_SLICE_QUEUE_LENGTH: 100,
     MAX_SLICE_QUEUE_WAIT_MS: 300000,
     MAX_CONCURRENT_SLICES: 1,
+    MAX_ZIP_ENTRIES: 10,
+    MAX_ZIP_UNCOMPRESSED_BYTES: 500 * 1024 * 1024,
     DEFAULT_LAYER_HEIGHT: 0.2,
     DEFAULT_INFIL_PERCENT: 20,
     DEFAULT_RELIEF_DEPTH_MM: 2,
@@ -92,10 +94,19 @@ const EXTENSIONS = {
 };
 
 /**
+ * Resolve HTTP port from environment with range validation.
+ * @returns {number} Validated HTTP port.
+ */
+function resolvePort() {
+    const parsed = Number.parseInt(process.env.PORT || `${DEFAULTS.PORT}`, 10);
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : DEFAULTS.PORT;
+}
+
+/**
  * HTTP port used by the Express API.
  * @type {number}
  */
-const PORT = DEFAULTS.PORT;
+const PORT = resolvePort();
 
 module.exports = {
     DEFAULTS,

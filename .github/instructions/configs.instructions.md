@@ -4,7 +4,7 @@ applyTo: "configs/**"
 
 # Configs Folder Instructions
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Scope
 - pricing.json is runtime pricing source of truth.

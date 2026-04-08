@@ -55,7 +55,6 @@ Public endpoints do not require admin key.
 ### Public
 
 - `GET /health`
-- `GET /health/detailed`
 - `GET /pricing`
 - `POST /prusa/slice`
 - `POST /orca/slice`
@@ -64,11 +63,13 @@ Public endpoints do not require admin key.
 
 ### Admin-protected
 
+- `GET /health/detailed`
 - `POST /pricing/FDM`
 - `POST /pricing/SLA`
 - `PATCH /pricing/:technology/:material`
 - `DELETE /pricing/:technology/:material`
 - `GET /admin/output-files`
+- `GET /admin/download/:fileName`
 
 ---
 
@@ -139,6 +140,7 @@ Uses `orca-slicer`.
 - Request-level profile overrides are supported:
   - `printerProfile` → machine profile from `configs/orca`
   - `processProfile` → process profile from `configs/orca`
+- Output artifacts are resolved through a per-request isolated output directory before final filename alignment.
 - Supports same size preprocessing options as Prusa endpoint (`sizeUnit`, `keepProportions`, `targetSizeX/Y/Z`, `scalePercent`, rotations)
 - Validates final model size against selected machine profile build-volume limits
 
@@ -301,14 +303,14 @@ Lists generated `.gcode` / `.sl1` files from `output/`.
   "files": [
     {
       "fileName": "model-output-1741285245000.gcode",
-      "downloadUrl": "/download/model-output-1741285245000.gcode",
+      "downloadUrl": "/admin/download/model-output-1741285245000.gcode",
       "sizeBytes": 182734,
       "createdAt": "2026-03-05T10:07:25.000Z",
       "modifiedAt": "2026-03-05T10:07:27.000Z"
     },
     {
       "fileName": "model-output-1741285301000.sl1",
-      "downloadUrl": "/download/model-output-1741285301000.sl1",
+      "downloadUrl": "/admin/download/model-output-1741285301000.sl1",
       "sizeBytes": 941282,
       "createdAt": "2026-03-05T10:08:21.000Z",
       "modifiedAt": "2026-03-05T10:08:24.000Z"
@@ -404,13 +406,20 @@ You can customize pricing, security, and slicing behavior without changing endpo
 
 - **Pricing Matrix:** Persisted in `configs/pricing.json` (managed via `/pricing` endpoints).
 - **Admin Security:** `ADMIN_API_KEY` environment variable controls access to pricing updates/deletes.
+- **Admin Browser CORS Control:** `/admin/*` browser-origin requests are constrained by `ADMIN_CORS_ALLOWED_ORIGINS`.
 - **Admin File Listing:** `GET /admin/output-files` requires `ADMIN_API_KEY` and returns generated output artifacts.
+- **Admin File Download:** `GET /admin/download/:fileName` requires `ADMIN_API_KEY` and allows downloading `.gcode` / `.sl1` artifacts.
 - **Fail-Fast Security:** Server startup is blocked if `ADMIN_API_KEY` is missing.
-- **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`).
+- **Security Logging:** Admin auth failures log client IP with forwarded-header-aware parsing (requires `TRUST_PROXY=true` behind proxy).
+- **Timing-Safe Auth:** Admin API key comparison uses constant-time comparison to prevent timing side-channel attacks.
+- **Upload Validation:** Multer accepts only a single file on the `choosenFile` field with file extension validation at upload time.
+- **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`). Expired rate-limit buckets are automatically pruned.
+- **Proxy Trust:** Set `TRUST_PROXY=true` in `.env` when deployed behind a reverse proxy (Nginx, Cloudflare) so `X-Forwarded-For` is used for IP resolution. Disabled by default to prevent IP spoofing.
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
-- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `100MB`).
-- **ZIP Safety Limits:** ZIP extraction is guarded by max entries (`MAX_ZIP_ENTRIES`, default `200`) and max cumulative extracted size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
+- **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `500MB`).
+- **ZIP Safety Limits:** ZIP extraction is guarded by max entries (`MAX_ZIP_ENTRIES`, default `10`) and max cumulative extracted size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
+- **ZIP Content Rule:** ZIP uploads must contain exactly one supported source file; unsupported or suspicious ZIP contents are rejected and cleaned up.
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
@@ -423,6 +432,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - `tests/testing-scripts/` is intended to be public and versioned.
 - `tests/testing-files/` sample payloads are intentionally excluded from repository publication.
 - `tests/testing-scripts/results/` generated reports are runtime artifacts and are ignored.
+
 ---
 
 ## 📦 Release Log

@@ -5,3 +5,4 @@ shapely
 ezdxf
 svg.path
 numpy-stl
+gmsh

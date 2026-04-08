@@ -14,33 +14,32 @@ function resolveSlicerExecutable(engine) {
 }
 
 /**
- * Build command-line arguments for selected slicer engine and technology.
+ * Build command-line arguments array for selected slicer engine and technology.
  * @param {'FDM'|'SLA'} technology Active print technology.
  * @param {string} configFile Runtime profile/config path.
  * @param {string} outputPath Desired output artifact path.
  * @param {string} infillPercentage Infill override (e.g. `20%`).
  * @param {'prusa'|'orca'} [engine='prusa'] Selected slicer engine.
  * @param {string | null} [orcaMachineConfigPath=null] Orca machine profile path.
- * @returns {string} CLI argument string.
+ * @returns {string[]} CLI argument array.
  */
 function buildSlicerCommandArgs(technology, configFile, outputPath, infillPercentage, engine = 'prusa', orcaMachineConfigPath = null) {
     if (engine === 'orca') {
         const outputDir = path.dirname(outputPath);
         const settingsFiles = [orcaMachineConfigPath, configFile].filter(Boolean).join(';');
-        return `--load-settings "${settingsFiles}" --arrange 1 --orient 1 --slice 0 --outputdir "${outputDir}"`;
+        return ['--load-settings', settingsFiles, '--arrange', '1', '--orient', '1', '--slice', '0', '--outputdir', outputDir];
     }
 
-    let slicerArgs = `--load "${configFile}"`;
-    slicerArgs += ' --center 100,100';
+    const args = ['--load', configFile, '--center', '100,100'];
 
     if (technology === 'SLA') {
-        slicerArgs += ` --export-sla --output "${outputPath}"`;
+        args.push('--export-sla', '--output', outputPath);
     } else {
-        slicerArgs += ' --support-material --support-material-auto';
-        slicerArgs += ` --gcode-flavor marlin --export-gcode --output "${outputPath}" --fill-density ${infillPercentage}`;
+        args.push('--support-material', '--support-material-auto');
+        args.push('--gcode-flavor', 'marlin', '--export-gcode', '--output', outputPath, '--fill-density', infillPercentage);
     }
 
-    return slicerArgs;
+    return args;
 }
 
 module.exports = {

@@ -31,9 +31,9 @@ You own all Node.js + Express code inside `app/`:
 - Orca: FDM only, layer heights 0.1, 0.2, 0.3, requires machine+process profile compatibility
 
 ## Existing Endpoints (keep stable unless explicitly changing)
-Public: GET /health, GET /health/detailed, GET /pricing, POST /prusa/slice, POST /orca/slice, GET /openapi.json, GET /docs, GET /
-Admin: POST /pricing/FDM, POST /pricing/SLA, PATCH /pricing/:technology/:material, DELETE /pricing/:technology/:material, GET /admin/output-files
-Static: GET /download/:fileName
+Public: GET /health, GET /pricing, POST /prusa/slice, POST /orca/slice, GET /openapi.json, GET /docs, GET /
+Admin: GET /health/detailed, POST /pricing/FDM, POST /pricing/SLA, PATCH /pricing/:technology/:material, DELETE /pricing/:technology/:material, GET /admin/output-files
+Admin: GET /admin/download/:fileName
 
 ## What You Must NOT Do
 - Touch Python files (`app/*.py`) — that's the Python Developer's scope.
@@ -41,7 +41,7 @@ Static: GET /download/:fileName
 - Touch documentation files (CLAUDE.md, README.md, etc.) — that's the Docs Syncer's scope.
 - Touch Docker files — that's the Docker Specialist's scope.
 - Add npm dependencies without explicit approval from the orchestrator.
-- Change the Express port (3000) without approval.
+- Change the default Express port fallback (3000) without approval.
 
 ## Working Style
 - Read the target files before making changes.

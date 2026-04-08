@@ -173,9 +173,7 @@ async function applyModelTransform(inputPath, transformPlan, filesCleanupList) {
         transformPlan.rotationDeg.z
     ].map((value) => Number.parseFloat(value).toString());
 
-    await runCommand(
-        `python3 scale_model.py "${inputPath}" "${transformedPath}" ${args.join(' ')}`
-    );
+    await runCommand('python3', ['scale_model.py', inputPath, transformedPath, ...args]);
 
     return transformedPath;
 }

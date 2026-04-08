@@ -4,12 +4,17 @@ Validates:
 - Unauthorized request is rejected
 - Authorized request succeeds
 - Response structure includes total + files array
+- Listed files expose admin-protected download URLs
+- Download endpoint requires admin key and serves listed files
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 SCRIPT_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_ROOT.parent.parent
@@ -23,6 +28,7 @@ from common.env_utils import resolve_admin_key_candidates, resolve_base_url
 from common.http_utils import curl_json
 
 OUTPUT_FILES_ENDPOINT = "/admin/output-files"
+DOWNLOAD_ENDPOINT_TEMPLATE = "/admin/download/{file_name}"
 UNAUTHORIZED_ALLOWED = {401, 503}
 
 
@@ -52,16 +58,30 @@ def write_report(*, base_url: str, success: bool, details: dict) -> None:
         "",
         f"- Unauthorized status: `{details.get('unauthorized_status')}`",
         f"- Authorized status: `{details.get('authorized_status')}`",
+        f"- Download unauthorized status: `{details.get('download_unauthorized_status')}`",
+        f"- Download authorized status: `{details.get('download_authorized_status')}`",
         f"- Total files: `{details.get('total_files')}`",
+        f"- Download sample endpoint: `{details.get('download_sample_endpoint')}`",
     ]
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def build_report_details(*, unauthorized_status: int | None, authorized_status: int | None, total_files: int | None) -> dict:
+def build_report_details(
+    *,
+    unauthorized_status: int | None,
+    authorized_status: int | None,
+    download_unauthorized_status: int | None,
+    download_authorized_status: int | None,
+    total_files: int | None,
+    download_sample_endpoint: str | None,
+) -> dict:
     return {
         "unauthorized_status": unauthorized_status,
         "authorized_status": authorized_status,
+        "download_unauthorized_status": download_unauthorized_status,
+        "download_authorized_status": download_authorized_status,
         "total_files": total_files,
+        "download_sample_endpoint": download_sample_endpoint,
     }
 
 
@@ -79,28 +99,95 @@ def run_authorized_check(base_url: str, api_keys: list[str]) -> tuple[int, dict 
     return status, body
 
 
-def validate_authorized_payload(body: dict | str | None) -> tuple[bool, int | None, str | None]:
+def curl_status_only(*, method: str, base_url: str, endpoint: str, api_key: str | None = None) -> tuple[int, str | None]:
+    cmd = [
+        "curl",
+        "-sS",
+        "-X",
+        method,
+        f"{base_url}{endpoint}",
+        "-o",
+        os.devnull,
+        "-w",
+        "%{http_code}",
+    ]
+
+    if api_key:
+        cmd.extend(["-H", f"x-api-key: {api_key}"])
+
+    completed = subprocess.run(cmd, capture_output=True, text=True)
+    if completed.returncode != 0:
+        return 0, (completed.stderr or "").strip() or "curl status check failed"
+
+    try:
+        return int(completed.stdout.strip() or "0"), None
+    except ValueError:
+        return 0, f"invalid HTTP status output: {completed.stdout!r}"
+
+
+def run_download_unauthorized_check(base_url: str) -> tuple[bool, int, dict | str | None]:
+    endpoint = DOWNLOAD_ENDPOINT_TEMPLATE.format(file_name="does-not-exist.gcode")
+    status, error = curl_status_only(method="GET", base_url=base_url, endpoint=endpoint)
+    return status in UNAUTHORIZED_ALLOWED, status, ({"error": error} if error else None)
+
+
+def run_download_authorized_check(
+    base_url: str,
+    api_keys: list[str],
+    download_endpoint: str | None,
+) -> tuple[bool, int | None, str | None]:
+    if not download_endpoint:
+        return True, None, None
+
+    status, _body = 0, None
+    for api_key in api_keys:
+        status, error = curl_status_only(method="GET", base_url=base_url, endpoint=download_endpoint, api_key=api_key)
+        if error:
+            continue
+        if status == 200:
+            return True, status, None
+
+    return False, status, f"expected 200 for authorized download endpoint, got {status}"
+
+
+def validate_authorized_payload(body: dict | str | None) -> tuple[bool, int | None, str | None, str | None]:
     if not isinstance(body, dict):
-        return False, None, "expected 200 with JSON body"
+        return False, None, "expected 200 with JSON body", None
 
     if body.get("success") is not True:
-        return False, None, "success flag is not true"
+        return False, None, "success flag is not true", None
 
     files = body.get("files")
     total = body.get("total")
     if not isinstance(files, list) or not isinstance(total, int):
-        return False, None, "invalid schema"
+        return False, None, "invalid schema", None
 
     if total != len(files):
-        return False, total, f"total mismatch. total={total} len(files)={len(files)}"
+        return False, total, f"total mismatch. total={total} len(files)={len(files)}", None
 
+    download_sample_endpoint = None
     if files:
         sample = files[0]
-        required = {"fileName", "sizeBytes", "createdAt", "modifiedAt"}
+        required = {"fileName", "downloadUrl", "sizeBytes", "createdAt", "modifiedAt"}
         if not isinstance(sample, dict) or not required.issubset(sample.keys()):
-            return False, total, f"file item schema mismatch. sample={sample}"
+            return False, total, f"file item schema mismatch. sample={sample}", None
 
-    return True, total, None
+        file_name = sample.get("fileName")
+        download_url = sample.get("downloadUrl")
+        if not isinstance(file_name, str) or not isinstance(download_url, str):
+            return False, total, f"file item type mismatch. sample={sample}", None
+
+        expected_download_url = DOWNLOAD_ENDPOINT_TEMPLATE.format(file_name=quote(file_name))
+        if download_url != expected_download_url:
+            return (
+                False,
+                total,
+                f"downloadUrl mismatch. expected={expected_download_url} actual={download_url}",
+                None,
+            )
+        download_sample_endpoint = download_url
+
+    return True, total, None, download_sample_endpoint
 
 
 def main() -> int:
@@ -120,10 +207,33 @@ def main() -> int:
             details=build_report_details(
                 unauthorized_status=unauthorized_status,
                 authorized_status=None,
+                download_unauthorized_status=None,
+                download_authorized_status=None,
                 total_files=None,
+                download_sample_endpoint=None,
             ),
         )
         print(f"[ADMIN OUTPUT TEST] FAIL: expected 401/503 without key, got {unauthorized_status}. body={unauthorized_body}")
+        return 1
+
+    download_unauthorized_ok, download_unauthorized_status, download_unauthorized_body = run_download_unauthorized_check(base_url)
+    if not download_unauthorized_ok:
+        write_report(
+            base_url=base_url,
+            success=False,
+            details=build_report_details(
+                unauthorized_status=unauthorized_status,
+                authorized_status=None,
+                download_unauthorized_status=download_unauthorized_status,
+                download_authorized_status=None,
+                total_files=None,
+                download_sample_endpoint=None,
+            ),
+        )
+        print(
+            "[ADMIN OUTPUT TEST] FAIL: expected 401/503 without key on download endpoint, "
+            f"got {download_unauthorized_status}. body={download_unauthorized_body}"
+        )
         return 1
 
     status, body = run_authorized_check(base_url, api_keys)
@@ -135,14 +245,17 @@ def main() -> int:
             details=build_report_details(
                 unauthorized_status=unauthorized_status,
                 authorized_status=status,
+                download_unauthorized_status=download_unauthorized_status,
+                download_authorized_status=None,
                 total_files=None,
+                download_sample_endpoint=None,
             ),
         )
         print(f"[ADMIN OUTPUT TEST] DEBUG base_url={base_url} tried_keys={len(api_keys)}")
         print(f"[ADMIN OUTPUT TEST] FAIL: expected 200 with JSON body, got {status}. body={body}")
         return 1
 
-    payload_ok, total, payload_error = validate_authorized_payload(body)
+    payload_ok, total, payload_error, download_sample_endpoint = validate_authorized_payload(body)
     if not payload_ok:
         write_report(
             base_url=base_url,
@@ -150,19 +263,46 @@ def main() -> int:
             details=build_report_details(
                 unauthorized_status=unauthorized_status,
                 authorized_status=status,
+                download_unauthorized_status=download_unauthorized_status,
+                download_authorized_status=None,
                 total_files=total,
+                download_sample_endpoint=download_sample_endpoint,
             ),
         )
         print(f"[ADMIN OUTPUT TEST] FAIL: {payload_error}. body={body}")
+        return 1
+
+    download_authorized_ok, download_authorized_status, download_error = run_download_authorized_check(
+        base_url,
+        api_keys,
+        download_sample_endpoint,
+    )
+    if not download_authorized_ok:
+        write_report(
+            base_url=base_url,
+            success=False,
+            details=build_report_details(
+                unauthorized_status=unauthorized_status,
+                authorized_status=status,
+                download_unauthorized_status=download_unauthorized_status,
+                download_authorized_status=download_authorized_status,
+                total_files=total,
+                download_sample_endpoint=download_sample_endpoint,
+            ),
+        )
+        print(f"[ADMIN OUTPUT TEST] FAIL: {download_error}")
         return 1
 
     write_report(
         base_url=base_url,
         success=True,
         details=build_report_details(
-            unauthorized_status=401,
+            unauthorized_status=unauthorized_status,
             authorized_status=200,
+            download_unauthorized_status=download_unauthorized_status,
+            download_authorized_status=download_authorized_status,
             total_files=total,
+            download_sample_endpoint=download_sample_endpoint,
         ),
     )
 

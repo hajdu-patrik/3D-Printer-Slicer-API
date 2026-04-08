@@ -2,7 +2,7 @@
  * Child process command execution helpers for slicer/converter calls.
  */
 
-const { exec } = require('node:child_process');
+const { execFile } = require('node:child_process');
 const { DEFAULTS } = require('../../config/constants');
 
 const DEBUG_COMMAND_LOGS = process.env.DEBUG_COMMAND_LOGS === 'true';
@@ -23,13 +23,14 @@ function truncateLogOutput(text) {
 }
 
 /**
- * Execute shell command with bounded timeout and buffer.
- * @param {string} cmd Command line to execute.
+ * Execute command with argument array using execFile (no shell interpolation).
+ * @param {string} executable Command executable path or name.
+ * @param {string[]} args Command arguments array.
  * @returns {Promise<{stdout: string, stderr: string}>} Command output streams.
  */
-function runCommand(cmd) {
+function runCommand(executable, args = []) {
     return new Promise((resolve, reject) => {
-        exec(cmd, { maxBuffer: 1024 * 10000, timeout: COMMAND_TIMEOUT_MS }, (error, stdout, stderr) => {
+        execFile(executable, args, { maxBuffer: 1024 * 10000, timeout: COMMAND_TIMEOUT_MS }, (error, stdout, stderr) => {
             if (DEBUG_COMMAND_LOGS && stdout) console.log(`[CMD LOG]:\n${truncateLogOutput(stdout)}`);
             if (DEBUG_COMMAND_LOGS && stderr) console.error(`[CMD ERR]:\n${truncateLogOutput(stderr)}`);
 
@@ -38,7 +39,7 @@ function runCommand(cmd) {
                     error.message = `The slicing process timed out after ${Math.round(COMMAND_TIMEOUT_MS / 60000)} minutes.`;
                 }
 
-                console.error(`[EXEC ERROR] Command failed: ${cmd}`);
+                console.error(`[EXEC ERROR] Command failed: ${executable} ${args.join(' ')}`);
                 if (stderr || stdout) {
                     console.error(`[EXEC OUTPUT]:\n${truncateLogOutput(stderr || stdout)}`);
                 }

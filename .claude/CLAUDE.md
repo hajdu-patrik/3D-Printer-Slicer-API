@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -27,7 +27,6 @@ Request upload -> option validation -> IP rate limit -> FIFO queue -> converter/
 ## Endpoint Reference
 Public endpoints:
 - GET /health
-- GET /health/detailed
 - GET /pricing
 - POST /prusa/slice
 - POST /orca/slice
@@ -36,11 +35,13 @@ Public endpoints:
 - GET /
 
 Admin endpoints (x-api-key required):
+- GET /health/detailed
 - POST /pricing/FDM
 - POST /pricing/SLA
 - PATCH /pricing/:technology/:material
 - DELETE /pricing/:technology/:material
 - GET /admin/output-files
+- GET /admin/download/:fileName
 
 ## Hard Rules
 - Use only root-scoped runtime directories: input/, output/, configs/.
@@ -52,6 +53,12 @@ Admin endpoints (x-api-key required):
 ## Security
 - ADMIN_API_KEY must be configured to start API.
 - Admin operations require matching x-api-key header.
+- Admin API key comparison uses crypto.timingSafeEqual (constant-time).
+- Admin auth failure logging resolves client IP with forwarded-header-aware parsing (requires TRUST_PROXY=true).
+- X-Forwarded-For is only trusted when TRUST_PROXY=true is explicitly configured.
+- Browser-origin requests to /admin/* are restricted by ADMIN_CORS_ALLOWED_ORIGINS.
+- Shell commands use execFile with argument arrays (no shell interpolation).
+- Upload accepts only a single file on choosenFile field with extension validation at upload time.
 
 ## Engine Constraints
 Prusa:
@@ -61,6 +68,7 @@ Orca:
 - FDM only
 - Supports layer heights: 0.1, 0.2, 0.3
 - Requires compatible machine/process profile pairing
+- Uses per-request isolated output directories before final output-file alignment.
 
 ## Queue and Rate Defaults
 - Slice rate limit: 3 requests per minute per IP

@@ -22,7 +22,7 @@ async function convertInputToStl(processableFile, depth, filesCleanupList) {
         console.log(`[INFO] Converting Image to STL (Depth: ${depth}mm)...`);
         finalStlPath = processableFile + '.stl';
         filesCleanupList.push(finalStlPath);
-        await runCommand(`python3 img2stl.py "${processableFile}" "${finalStlPath}" ${depth}`);
+        await runCommand('python3', ['img2stl.py', processableFile, finalStlPath, String(depth)]);
         return finalStlPath;
     }
 
@@ -30,7 +30,7 @@ async function convertInputToStl(processableFile, depth, filesCleanupList) {
         console.log(`[INFO] Converting Vector to STL (Depth: ${depth}mm)...`);
         finalStlPath = processableFile + '.stl';
         filesCleanupList.push(finalStlPath);
-        await runCommand(`python3 vector2stl.py "${processableFile}" "${finalStlPath}" ${depth}`);
+        await runCommand('python3', ['vector2stl.py', processableFile, finalStlPath, String(depth)]);
         return finalStlPath;
     }
 
@@ -38,7 +38,7 @@ async function convertInputToStl(processableFile, depth, filesCleanupList) {
         console.log('[INFO] Converting Mesh to STL...');
         finalStlPath = processableFile + '.stl';
         filesCleanupList.push(finalStlPath);
-        await runCommand(`python3 mesh2stl.py "${processableFile}" "${finalStlPath}"`);
+        await runCommand('python3', ['mesh2stl.py', processableFile, finalStlPath]);
         return finalStlPath;
     }
 
@@ -46,7 +46,7 @@ async function convertInputToStl(processableFile, depth, filesCleanupList) {
         console.log('[INFO] Converting CAD to STL...');
         finalStlPath = processableFile + '.stl';
         filesCleanupList.push(finalStlPath);
-        await runCommand(`python3 cad2stl.py "${processableFile}" "${finalStlPath}"`);
+        await runCommand('python3', ['cad2stl.py', processableFile, finalStlPath]);
         return finalStlPath;
     }
 
@@ -65,7 +65,7 @@ async function tryOptimizeOrientation(processableFile, technology, filesCleanupL
     const orientedStlPath = processableFile.replace('.stl', '_oriented.stl');
 
     try {
-        await runCommand(`python3 orient.py "${processableFile}" "${orientedStlPath}" ${technology}`);
+        await runCommand('python3', ['orient.py', processableFile, orientedStlPath, technology]);
         if (fs.existsSync(orientedStlPath)) {
             filesCleanupList.push(orientedStlPath);
             return orientedStlPath;

@@ -8,7 +8,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '3.0.5',
+            version: '3.1.0',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -474,6 +474,7 @@ function createSwaggerDocument(pricing) {
                                                 type: 'object',
                                                 properties: {
                                                     fileName: { type: 'string', example: 'Cactus-output-1772126605107.gcode' },
+                                                    downloadUrl: { type: 'string', example: '/admin/download/Cactus-output-1772126605107.gcode' },
                                                     sizeBytes: { type: 'integer', example: 409600 },
                                                     createdAt: { type: 'string', format: 'date-time' },
                                                     modifiedAt: { type: 'string', format: 'date-time' }
@@ -488,6 +489,45 @@ function createSwaggerDocument(pricing) {
                     401: { description: 'Unauthorized' },
                     503: { description: 'Admin API key is not configured on server' },
                     500: { description: 'Failed to list output files' }
+                }
+            }
+        },
+        '/admin/download/{fileName}': {
+            get: {
+                tags: ['Admin'],
+                summary: 'Download a generated output file from output directory.',
+                description: 'Protected endpoint. Requires x-api-key header. Only .gcode and .sl1 files are allowed.',
+                parameters: [
+                    {
+                        name: 'fileName',
+                        in: 'path',
+                        required: true,
+                        schema: { type: 'string' }
+                    },
+                    {
+                        name: 'x-api-key',
+                        in: 'header',
+                        required: true,
+                        schema: { type: 'string' }
+                    }
+                ],
+                responses: {
+                    200: {
+                        description: 'Binary file download stream',
+                        content: {
+                            'application/octet-stream': {
+                                schema: {
+                                    type: 'string',
+                                    format: 'binary'
+                                }
+                            }
+                        }
+                    },
+                    400: { description: 'Invalid file name/path' },
+                    401: { description: 'Unauthorized' },
+                    404: { description: 'Output file not found' },
+                    503: { description: 'Admin API key is not configured on server' },
+                    500: { description: 'Failed to download output file' }
                 }
             }
         }

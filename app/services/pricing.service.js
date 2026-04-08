@@ -118,7 +118,7 @@ function loadPricingFromDisk() {
  * @returns {{FDM: Record<string, number>, SLA: Record<string, number>}}
  */
 function getPricing() {
-    return pricing;
+    return structuredClone(pricing);
 }
 
 /**

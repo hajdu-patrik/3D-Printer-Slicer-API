@@ -21,7 +21,8 @@ const {
     buildOutputFilename,
     roundDimensions,
     roundToThree,
-    resolveLatestOutputFile,
+    createIsolatedOutputDir,
+    resolveSingleOutputFile,
     alignOrcaOutputFileName,
     cleanupFiles
 } = require('./slice/common');
@@ -66,10 +67,10 @@ function createQueueErrorResponse(err, res) {
 /**
  * Locate uploaded multipart input by expected field name.
  * @param {import('express').Request} req Express request.
- * @returns {import('multer').File | undefined} Uploaded file descriptor when present.
+ * @returns {import('multer').File | null} Uploaded file descriptor when present.
  */
 function findUploadedModelFile(req) {
-    return req.files ? req.files.find((candidate) => candidate.fieldname === 'choosenFile') : null;
+    return req.file && req.file.fieldname === 'choosenFile' ? req.file : null;
 }
 
 /**
@@ -236,7 +237,13 @@ async function processSlice(req, res, options = {}) {
     const { forcedTechnology = null, engine = 'prusa' } = options;
 
     const file = findUploadedModelFile(req);
-    if (!file) return res.status(400).json({ error: 'No file uploaded (use key "choosenFile")' });
+    if (!file) {
+        return res.status(400).json({
+            success: false,
+            error: 'No file uploaded (use key "choosenFile")',
+            errorCode: 'NO_FILE_UPLOADED'
+        });
+    }
 
     let inputFile = file.path;
     const originalName = file.originalname;
@@ -274,6 +281,13 @@ async function processSlice(req, res, options = {}) {
 
         const outputFilename = buildOutputFilename(originalName, technology);
         const outputPath = path.join(OUTPUT_DIR, outputFilename);
+        const orcaOutputDir = engine === 'orca' ? createIsolatedOutputDir(OUTPUT_DIR) : null;
+        if (orcaOutputDir) {
+            filesCleanupList.push(orcaOutputDir);
+        }
+        const slicerOutputPath = engine === 'orca'
+            ? path.join(orcaOutputDir, outputFilename)
+            : outputPath;
 
         const profileSelection = resolveProfileSelection(engine, technology, layerHeight, profileOverrides);
         if (!profileSelection.isValid) {
@@ -312,19 +326,19 @@ async function processSlice(req, res, options = {}) {
         const slicerArgs = buildSlicerCommandArgs(
             technology,
             runtimeConfigFile,
-            outputPath,
+            slicerOutputPath,
             infillPercentage,
             engine,
             orcaMachineConfigFile
         );
         const slicerExecutable = resolveSlicerExecutable(engine);
-        await runCommand(`${slicerExecutable} ${slicerArgs} "${processableFile}"`);
+        await runCommand(slicerExecutable, [...slicerArgs, processableFile]);
 
         const effectiveOutputPath = engine === 'orca'
-            ? alignOrcaOutputFileName(resolveLatestOutputFile(OUTPUT_DIR, '.gcode'), outputPath)
+            ? alignOrcaOutputFileName(resolveSingleOutputFile(orcaOutputDir, '.gcode'), outputPath)
             : outputPath;
 
-        finalizeEngineMetadata(engine);
+        finalizeEngineMetadata(engine, orcaOutputDir || OUTPUT_DIR);
 
         const stats = await parseOutputDetailed(
             effectiveOutputPath,

@@ -4,7 +4,7 @@ applyTo: "tests/testing-scripts/**"
 
 # Testing Scripts Instructions
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Test Entry Points
 - full_api_test_runner.py

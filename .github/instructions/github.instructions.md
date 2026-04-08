@@ -4,7 +4,7 @@ applyTo: ".github/**"
 
 # GitHub Folder Instructions
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Scope
 - Keep Copilot instructions centralized in .github/copilot-instructions.md.

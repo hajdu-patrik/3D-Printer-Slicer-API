@@ -122,8 +122,9 @@ COPY --chown=slicer:slicer configs/ ./configs/
 COPY --chown=slicer:slicer package.json package-lock.json ./
 
 # 6. Create runtime directories with exact ownership
-RUN mkdir -p /app/input /app/output \
-    && chown slicer:slicer /app/input /app/output
+# Root-scoped runtime folders inside WORKDIR (/app): input/, output/, configs/
+RUN mkdir -p input output configs \
+    && chown -R slicer:slicer input output configs
 
 # Switch to safe user
 USER slicer

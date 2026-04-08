@@ -1,6 +1,6 @@
 # Testing Scripts - Local Claude Guide
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Scope
 This folder contains API-level Python integration and workflow tests.

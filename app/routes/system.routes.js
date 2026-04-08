@@ -14,6 +14,16 @@ const router = express.Router();
 const ALLOWED_OUTPUT_EXTENSIONS = new Set(['.gcode', '.sl1']);
 
 /**
+ * Validate output file token for safe direct download lookup.
+ * @param {string} fileName Raw requested file token.
+ * @returns {boolean} True when token is safe and extension is allowed.
+ */
+function isAllowedOutputFileName(fileName) {
+    if (!fileName || fileName.includes('/') || fileName.includes('\\')) return false;
+    return ALLOWED_OUTPUT_EXTENSIONS.has(path.extname(fileName).toLowerCase());
+}
+
+/**
  * Liveness endpoint used by monitors and container health checks.
  * @param {import('express').Request} req Express request object.
  * @param {import('express').Response} res Express response object.
@@ -83,7 +93,7 @@ async function checkPythonAvailability() {
  * @param {import('express').Response} res Express response object.
  * @returns {Promise<import('express').Response>}
  */
-router.get('/health/detailed', async (req, res) => {
+router.get('/health/detailed', requireAdmin, async (req, res) => {
     try {
         const timestamp = new Date().toISOString();
         const uptime = process.uptime();
@@ -105,11 +115,11 @@ router.get('/health/detailed', async (req, res) => {
             uptime,
             subsystems: {
                 slicers: {
-                    prusa: { available: slicerPathsOK.prusa, path: PRUSA_CONFIGS_DIR },
-                    orca: { available: slicerPathsOK.orca, path: ORCA_CONFIGS_DIR }
+                    prusa: { available: slicerPathsOK.prusa },
+                    orca: { available: slicerPathsOK.orca }
                 },
                 storage: {
-                    outputDir: { accessible: outputDirAccessible, path: OUTPUT_DIR }
+                    outputDir: { accessible: outputDirAccessible }
                 },
                 queue: queueStatus,
                 python: {
@@ -122,11 +132,11 @@ router.get('/health/detailed', async (req, res) => {
         const statusCode = healthReport.status === 'OK' ? 200 : 503;
         return res.status(statusCode).json(healthReport);
     } catch (error_) {
+        console.error('[HEALTH DETAILED ERROR]', error_.message);
         return res.status(500).json({
             status: 'ERROR',
             timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            error: error_.message
+            error: 'Internal server error while checking system health.'
         });
     }
 });
@@ -164,7 +174,7 @@ router.get('/admin/output-files', requireAdmin, (req, res) => {
 
                 return {
                     fileName: entry.name,
-                    downloadUrl: `/download/${encodeURIComponent(entry.name)}`,
+                    downloadUrl: `/admin/download/${encodeURIComponent(entry.name)}`,
                     sizeBytes: stat.size,
                     createdAt: stat.birthtime.toISOString(),
                     modifiedAt: stat.mtime.toISOString()
@@ -187,11 +197,59 @@ router.get('/admin/output-files', requireAdmin, (req, res) => {
             files: entries
         });
     } catch (error_) {
+        console.error('[ADMIN OUTPUT FILES ERROR]', error_.message);
         return res.status(500).json({
             success: false,
-            error: `Failed to list output files. ${error_.message}`
+            error: 'Failed to list output files.'
         });
     }
+});
+
+/**
+ * Protected endpoint for downloading generated output files.
+ * Requires valid x-api-key header.
+ * @param {import('express').Request} req Express request object.
+ * @param {import('express').Response} res Express response object.
+ * @returns {import('express').Response | void}
+ */
+router.get('/admin/download/:fileName', requireAdmin, (req, res) => {
+    const fileName = String(req.params.fileName || '');
+
+    if (!isAllowedOutputFileName(fileName)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid output file name.',
+            errorCode: 'INVALID_OUTPUT_FILE'
+        });
+    }
+
+    const resolvedOutputDir = path.resolve(OUTPUT_DIR);
+    const filePath = path.resolve(path.join(resolvedOutputDir, fileName));
+    if (path.relative(resolvedOutputDir, filePath).startsWith('..')) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid output file path.',
+            errorCode: 'INVALID_OUTPUT_FILE_PATH'
+        });
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({
+            success: false,
+            error: 'Output file not found.',
+            errorCode: 'OUTPUT_FILE_NOT_FOUND'
+        });
+    }
+
+    return res.download(filePath, fileName, (error_) => {
+        if (error_ && !res.headersSent) {
+            res.status(500).json({
+                success: false,
+                error: 'Failed to download output file.',
+                errorCode: 'DOWNLOAD_FAILED'
+            });
+        }
+    });
 });
 
 module.exports = router;

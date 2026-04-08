@@ -6,15 +6,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const yauzl = require('yauzl');
-const { EXTENSIONS } = require('../../config/constants');
+const { EXTENSIONS, DEFAULTS } = require('../../config/constants');
 const { parsePositiveInt } = require('./number-utils');
 
-const DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = parsePositiveInt(
-    process.env.MAX_ZIP_UNCOMPRESSED_BYTES || `${DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES}`,
-    DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES
+    process.env.MAX_ZIP_UNCOMPRESSED_BYTES || `${DEFAULTS.MAX_ZIP_UNCOMPRESSED_BYTES}`,
+    DEFAULTS.MAX_ZIP_UNCOMPRESSED_BYTES
 );
-const MAX_ZIP_ENTRIES = parsePositiveInt(process.env.MAX_ZIP_ENTRIES || '200', 200);
+const MAX_ZIP_ENTRIES = parsePositiveInt(process.env.MAX_ZIP_ENTRIES || `${DEFAULTS.MAX_ZIP_ENTRIES}`, DEFAULTS.MAX_ZIP_ENTRIES);
 
 /**
  * Open ZIP archive in lazy-entry mode for safe bounded traversal.
@@ -86,17 +85,10 @@ async function inspectZipFile(zipPath, supportedExts) {
 
     return new Promise((resolve, reject) => {
         let totalUncompressed = 0;
-        let entryCount = 0;
+        let fileEntryCount = 0;
         const candidates = [];
 
         zipFile.on('entry', (entry) => {
-            entryCount += 1;
-            if (entryCount > MAX_ZIP_ENTRIES) {
-                zipFile.close();
-                reject(new Error('ZIP_GUARD|ZIP contains too many files.'));
-                return;
-            }
-
             if (entry.generalPurposeBitFlag & 0x1) {
                 zipFile.close();
                 reject(new Error('ZIP_GUARD|Encrypted ZIP files are not supported.'));
@@ -117,16 +109,33 @@ async function inspectZipFile(zipPath, supportedExts) {
             }
 
             if (!entry.fileName.endsWith('/')) {
-                const ext = path.extname(entry.fileName).toLowerCase();
-                if (supportedExts.has(ext)) {
-                    candidates.push(entry.fileName);
+                fileEntryCount += 1;
+                if (fileEntryCount > MAX_ZIP_ENTRIES) {
+                    zipFile.close();
+                    reject(new Error('ZIP_GUARD|ZIP contains too many files.'));
+                    return;
                 }
+
+                const ext = path.extname(entry.fileName).toLowerCase();
+                if (!supportedExts.has(ext)) {
+                    zipFile.close();
+                    reject(new Error('ZIP_GUARD|ZIP contains unsupported file type.'));
+                    return;
+                }
+
+                candidates.push(entry.fileName);
             }
 
             zipFile.readEntry();
         });
 
         zipFile.once('end', () => {
+            if (candidates.length > 1) {
+                zipFile.close();
+                reject(new Error('ZIP_GUARD|ZIP must contain exactly one supported source file.'));
+                return;
+            }
+
             zipFile.close();
             resolve(candidates);
         });
@@ -236,12 +245,12 @@ async function extractFirstSupportedFromZip(inputFile, filesCleanupList) {
     const extractedPath = path.join(unzipDir, selectedName);
     await extractZipEntry(zipPath, selectedEntry, extractedPath);
 
-    const extractedFiles = fs.readdirSync(unzipDir);
-    const foundFile = extractedFiles.find((f) => supportedExts.has(path.extname(f).toLowerCase()));
-    if (!foundFile) throw new Error('ZIP does not contain a supported 3D/Image/Vector file.');
+    if (!fs.existsSync(extractedPath)) {
+        throw new Error('ZIP_GUARD|Failed to extract validated source file from ZIP.');
+    }
 
-    console.log(`[INFO] Found in ZIP: ${foundFile}`);
-    return path.join(unzipDir, foundFile);
+    console.log(`[INFO] Found in ZIP: ${selectedName}`);
+    return extractedPath;
 }
 
 module.exports = {

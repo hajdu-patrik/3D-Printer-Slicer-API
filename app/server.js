@@ -3,16 +3,17 @@
  */
 
 const express = require('express');
-const path = require('node:path');
 const cors = require('cors');
+const helmet = require('helmet');
 const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 const createSwaggerDocument = require('./docs/swagger-docs');
 const pricingRoutes = require('./routes/pricing.routes');
 const sliceRoutes = require('./routes/slice.routes');
 const systemRoutes = require('./routes/system.routes');
+const errorHandler = require('./middleware/errorHandler');
 const { PORT, DEFAULTS } = require('./config/constants');
-const { OUTPUT_DIR, ensureRequiredDirectories } = require('./config/paths');
+const { ensureRequiredDirectories } = require('./config/paths');
 const { loadPricingFromDisk, getPricing } = require('./services/pricing.service');
 
 // Security check for critical environment variables
@@ -27,12 +28,70 @@ loadPricingFromDisk();
 
 /** @type {import('express').Express} */
 const app = express();
-app.use(cors());
+
+const standardHelmet = helmet();
+const docsHelmet = helmet({
+    contentSecurityPolicy: false
+});
+
+/**
+ * Parse comma-separated origin list from environment.
+ * @param {string | undefined} value Raw environment value.
+ * @returns {string[]} Normalized origins.
+ */
+function parseAllowedOrigins(value) {
+    return String(value || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+}
+
+const adminAllowedOrigins = parseAllowedOrigins(process.env.ADMIN_CORS_ALLOWED_ORIGINS);
+
+/**
+ * Resolve dynamic CORS options for public and admin endpoints.
+ * Public routes allow all origins. Admin routes require explicit allowlist for browser-origin requests.
+ * @param {import('express').Request} req Express request instance.
+ * @param {(err: Error | null, options?: import('cors').CorsOptions) => void} callback CORS callback.
+ * @returns {void}
+ */
+function resolveCorsOptions(req, callback) {
+    const requestOrigin = req.header('Origin');
+    const isAdminRoute = req.path === '/admin' || req.path.startsWith('/admin/');
+
+    if (!isAdminRoute) {
+        callback(null, { origin: true });
+        return;
+    }
+
+    if (!requestOrigin) {
+        callback(null, { origin: true });
+        return;
+    }
+
+    if (adminAllowedOrigins.includes(requestOrigin)) {
+        callback(null, { origin: true });
+        return;
+    }
+
+    const corsError = new Error('Admin CORS origin is not allowed.');
+    corsError.code = 'ADMIN_CORS_ORIGIN_NOT_ALLOWED';
+    corsError.status = 403;
+    callback(corsError);
+}
+
+app.use((req, res, next) => {
+    const isDocsRoute = req.path === '/openapi.json' || req.path.startsWith('/docs');
+    if (isDocsRoute) {
+        return docsHelmet(req, res, next);
+    }
+
+    return standardHelmet(req, res, next);
+});
+
+app.use(cors(resolveCorsOptions));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || DEFAULTS.JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || DEFAULTS.FORM_BODY_LIMIT }));
-
-// Serve static files (like generated STL files)
-app.use('/download', express.static(path.join(OUTPUT_DIR)));
 
 // Swagger UI setup
 const swaggerUiOptions = {
@@ -81,10 +140,16 @@ app.use(systemRoutes);
 // Catch-all for unknown routes
 app.all('*', (req, res) => {
     console.warn(`[ROUTING] Unknown or invalid request: ${req.method} ${req.originalUrl}`);
-    res.redirect('/docs');
+    return res.status(404).json({
+        success: false,
+        error: 'Route not found.',
+        errorCode: 'ROUTE_NOT_FOUND'
+    });
 });
 
 // Global error handler
+app.use(errorHandler);
+
 app.listen(PORT, () => {
     console.log(`FDM and SLA Slicer Engine running on port ${PORT}`);
     console.log(`Swagger Docs available at http://localhost:${PORT}/docs`);

@@ -1,6 +1,6 @@
 # Configs Folder - Local Claude Guide
 
-Last synchronized: 2026-04-07
+Last synchronized: 2026-04-08
 
 ## Scope
 This folder contains runtime configuration files used by slicing and pricing.

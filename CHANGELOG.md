@@ -2,6 +2,49 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.1.0 (2026-04-08)
+
+### Security Hardening
+
+- **Shell command injection prevention:** Replaced `child_process.exec()` with `child_process.execFile()` across all command execution paths. All Python converter calls (`img2stl.py`, `vector2stl.py`, `mesh2stl.py`, `cad2stl.py`, `orient.py`, `scale_model.py`), `prusa-slicer --info`, and slicer invocations now use argument arrays instead of string interpolation — eliminates shell injection via crafted filenames or parameters.
+  - `app/services/slice/command.js` — core `runCommand()` signature changed from `(cmd: string)` to `(executable, args[])`
+  - `app/services/slice/input-processing.js` — all 5 converter/orientation calls updated
+  - `app/services/slice/transform.js` — `scale_model.py` call updated
+  - `app/services/slice/model-stats.js` — `prusa-slicer --info` call updated
+  - `app/services/slice/engine.js` — `buildSlicerCommandArgs()` now returns `string[]` instead of concatenated string
+  - `app/services/slice.service.js` — slicer invocation uses spread args
+
+- **Timing-safe admin key comparison:** Admin API key verification in `app/middleware/requireAdmin.js` now uses `crypto.timingSafeEqual()` with fixed-length buffer handling to prevent timing side-channel attacks.
+
+- **IP spoofing prevention:** `app/utils/client-ip.js` now only trusts `X-Forwarded-For` header when `TRUST_PROXY=true` is explicitly configured in environment. Default behavior ignores the header, preventing rate-limit bypass via header spoofing.
+
+- **Rate-limit memory leak fix:** `app/middleware/rateLimit.js` now runs periodic cleanup (`setInterval` with `.unref()`) to evict expired IP buckets, preventing unbounded memory growth under sustained traffic.
+
+- **Upload restriction hardening:** `app/routes/slice.routes.js` changed from `upload.any()` to `upload.single('choosenFile')` with a `fileFilter` that validates file extensions against the known-good set before writing to disk. Prevents arbitrary file field flooding and rejects unsupported formats at upload time.
+
+- **Information disclosure fixes:**
+  - `GET /health/detailed` now requires `requireAdmin` middleware — no longer publicly exposes queue state, Python version, or filesystem accessibility
+  - Removed internal filesystem `path` fields from `/health/detailed` subsystem response (slicer paths, output directory path)
+  - All 500 error responses in `app/routes/system.routes.js` now return generic messages and log details server-side only
+
+- **Multer error handling hardening:** `app/middleware/errorHandler.js` now handles `LIMIT_UNEXPECTED_FILE` (returns 400 with `UNEXPECTED_FILE_FIELD`) and generic `MulterError` (returns 400 with `UPLOAD_ERROR`) instead of falling through as 500 Internal Server Error.
+
+### Changed
+
+- `GET /health/detailed` moved from public to admin-protected endpoint (requires `x-api-key` header)
+- `app/services/slice.service.js` — `findUploadedModelFile()` updated for `req.file` (singular) API from `upload.single()`
+- Added `TRUST_PROXY` to environment configuration keys across all instruction files
+
+### Documentation
+
+- Updated endpoint classification in all instruction/documentation files (15 files):
+  - `README.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`
+  - `app/CLAUDE.md`, `.github/instructions/app.instructions.md`, `.github/instructions/repository.instructions.md`
+  - `.claude/agents/js-developer.md`, `.github/agents/js-developer.md`
+- Added security documentation to `README.md`: timing-safe auth, proxy trust, upload validation, rate-limit cleanup
+- Updated `VPS settings.md`: added `TRUST_PROXY=true` to `.env` guide, added `X-Forwarded-For` and `X-Forwarded-Proto` proxy headers to Nginx config
+- Updated `app/CLAUDE.md`: errorHandler middleware entry, client-ip TRUST_PROXY note, /health/detailed admin note
+
 ## v3.0.5 (2026-04-08)
 
 ### Added

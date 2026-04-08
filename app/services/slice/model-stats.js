@@ -13,7 +13,7 @@ const { runCommand } = require('./command');
  */
 async function getModelInfo(filePath) {
     try {
-        const { stdout } = await runCommand(`prusa-slicer --info "${filePath}"`);
+        const { stdout } = await runCommand('prusa-slicer', ['--info', filePath]);
         let x = 0;
         let y = 0;
         let z = 0;

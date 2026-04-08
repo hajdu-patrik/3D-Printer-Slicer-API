@@ -91,27 +91,37 @@ function roundDimensions(dimensions) {
 }
 
 /**
- * Resolve the newest output file for extension in a directory.
+ * Create a per-request isolated output directory under the output root.
+ * @param {string} outputRootDir Root output directory path.
+ * @param {string} [prefix='orca-job'] Directory name prefix.
+ * @returns {string} Created directory path.
+ */
+function createIsolatedOutputDir(outputRootDir, prefix = 'orca-job') {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const dirPath = path.join(outputRootDir, `${prefix}-${suffix}`);
+    fs.mkdirSync(dirPath, { recursive: true });
+    return dirPath;
+}
+
+/**
+ * Resolve a single generated file from an isolated output directory.
  * @param {string} outputDir Output directory path.
  * @param {string} extension Extension filter (e.g. `.gcode`).
- * @returns {string | null} Latest matching file path or null.
+ * @returns {string | null} Matching file path or null.
  */
-function resolveLatestOutputFile(outputDir, extension) {
+function resolveSingleOutputFile(outputDir, extension) {
     if (!fs.existsSync(outputDir)) return null;
 
     const candidates = fs.readdirSync(outputDir)
         .filter((name) => name.toLowerCase().endsWith(extension))
-        .map((name) => {
-            const filePath = path.join(outputDir, name);
-            const stat = fs.statSync(filePath);
-            return {
-                filePath,
-                mtimeMs: stat.mtimeMs
-            };
-        })
-        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+        .map((name) => path.join(outputDir, name));
 
-    return candidates[0]?.filePath || null;
+    if (candidates.length === 0) return null;
+    if (candidates.length > 1) {
+        throw new Error(`Expected one generated ${extension} file in ${outputDir}, got ${candidates.length}.`);
+    }
+
+    return candidates[0];
 }
 
 /**
@@ -182,7 +192,8 @@ module.exports = {
     buildOutputFilename,
     roundToThree,
     roundDimensions,
-    resolveLatestOutputFile,
+    createIsolatedOutputDir,
+    resolveSingleOutputFile,
     alignOrcaOutputFileName,
     cleanupOrcaResultMetadata,
     cleanupFiles

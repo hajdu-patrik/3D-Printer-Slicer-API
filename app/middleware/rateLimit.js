@@ -3,6 +3,7 @@
  */
 
 const { DEFAULTS } = require('../config/constants');
+const { getClientIp } = require('../utils/client-ip');
 
 /**
  * Parse positive integer values from environment or user input with fallback.
@@ -16,25 +17,22 @@ function parsePositiveInt(value, fallback) {
 }
 
 /**
- * Resolve request origin IP, preferring reverse-proxy forwarded header.
- * @param {import('express').Request} req Express request object.
- * @returns {string} Client IP string used as rate-limit key.
- */
-function getClientIp(req) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-        return forwarded.split(',')[0].trim();
-    }
-    return req.ip || req.socket?.remoteAddress || 'unknown';
-}
-
-/**
  * Build an Express middleware that enforces request-per-window limits by IP.
  * @param {{windowMs: number, maxRequests: number}} config Rate-limit configuration.
  * @returns {import('express').RequestHandler} Rate-limit middleware instance.
  */
 function createIpRateLimiter({ windowMs, maxRequests }) {
     const buckets = new Map();
+
+    const cleanupIntervalMs = Math.max(windowMs * 2, 60_000);
+    setInterval(() => {
+        const now = Date.now();
+        for (const [ip, bucket] of buckets) {
+            if (now > bucket.resetAt) {
+                buckets.delete(ip);
+            }
+        }
+    }, cleanupIntervalMs).unref();
 
     return function ipRateLimiter(req, res, next) {
         const now = Date.now();

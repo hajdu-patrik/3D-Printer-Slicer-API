@@ -18,10 +18,10 @@ function parsePositiveInt(value, fallback) {
 
 /**
  * Build an Express middleware that enforces request-per-window limits by IP.
- * @param {{windowMs: number, maxRequests: number}} config Rate-limit configuration.
+ * @param {{windowMs: number, maxRequests: number, errorCode?: string, errorMessage?: string}} config Rate-limit configuration.
  * @returns {import('express').RequestHandler} Rate-limit middleware instance.
  */
-function createIpRateLimiter({ windowMs, maxRequests }) {
+function createIpRateLimiter({ windowMs, maxRequests, errorCode = 'RATE_LIMIT_EXCEEDED', errorMessage = 'Too many requests. Please retry later.' }) {
     const buckets = new Map();
 
     const cleanupIntervalMs = Math.max(windowMs * 2, 60_000);
@@ -49,8 +49,8 @@ function createIpRateLimiter({ windowMs, maxRequests }) {
             res.setHeader('Retry-After', String(retryAfterSeconds));
             return res.status(429).json({
                 success: false,
-                error: 'Too many requests. Please retry later.',
-                errorCode: 'RATE_LIMIT_EXCEEDED',
+                error: errorMessage,
+                errorCode,
                 retryAfterSeconds
             });
         }
@@ -68,6 +68,14 @@ const SLICE_RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(
     process.env.SLICE_RATE_LIMIT_MAX_REQUESTS,
     DEFAULTS.SLICE_RATE_LIMIT_MAX_REQUESTS
 );
+const ADMIN_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+    process.env.ADMIN_RATE_LIMIT_WINDOW_MS,
+    DEFAULTS.ADMIN_RATE_LIMIT_WINDOW_MS
+);
+const ADMIN_RATE_LIMIT_MAX_REQUESTS = parsePositiveInt(
+    process.env.ADMIN_RATE_LIMIT_MAX_REQUESTS,
+    DEFAULTS.ADMIN_RATE_LIMIT_MAX_REQUESTS
+);
 
 /**
  * IP-based limiter used on slicing endpoints to reduce brute-force and flood traffic.
@@ -78,6 +86,17 @@ const sliceRateLimiter = createIpRateLimiter({
     maxRequests: SLICE_RATE_LIMIT_MAX_REQUESTS
 });
 
+/**
+ * IP-based limiter used on admin endpoints to mitigate brute-force API key attempts.
+ */
+const adminRateLimiter = createIpRateLimiter({
+    windowMs: ADMIN_RATE_LIMIT_WINDOW_MS,
+    maxRequests: ADMIN_RATE_LIMIT_MAX_REQUESTS,
+    errorCode: 'ADMIN_RATE_LIMIT_EXCEEDED',
+    errorMessage: 'Too many admin requests. Please retry later.'
+});
+
 module.exports = {
-    sliceRateLimiter
+    sliceRateLimiter,
+    adminRateLimiter
 };

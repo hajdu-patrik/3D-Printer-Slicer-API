@@ -2,6 +2,7 @@
  * Model transformation planning (scale/rotate) and post-transform bounds validation.
  */
 
+const { PYTHON_EXECUTABLE } = require('../../config/python');
 const { runCommand } = require('./command');
 const { getModelInfo } = require('./model-stats');
 const { validateModelDimensionsAgainstLimits } = require('./profiles');
@@ -173,7 +174,7 @@ async function applyModelTransform(inputPath, transformPlan, filesCleanupList) {
         transformPlan.rotationDeg.z
     ].map((value) => Number.parseFloat(value).toString());
 
-    await runCommand('python3', ['scale_model.py', inputPath, transformedPath, ...args]);
+    await runCommand(PYTHON_EXECUTABLE, ['scale_model.py', inputPath, transformedPath, ...args]);
 
     return transformedPath;
 }

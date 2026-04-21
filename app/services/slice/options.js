@@ -19,6 +19,11 @@ const {
     sanitizeProfileFileName
 } = require('./value-parsers');
 
+const MAX_RELIEF_DEPTH_MM = (() => {
+    const parsed = parseNumberLike(process.env.DEFAULT_RELIEF_DEPTH_MAX_MM);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULTS.DEFAULT_RELIEF_DEPTH_MAX_MM;
+})();
+
 /**
  * Parse and validate layer-height numeric value.
  * @param {unknown} layerHeightRaw Raw layer height input.
@@ -354,10 +359,26 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
     }
 
     const material = input.material || DEFAULTS.DEFAULT_FDM_MATERIAL;
-    const parsedDepth = parseNumberLike(input.depth || `${DEFAULTS.DEFAULT_RELIEF_DEPTH_MM}`);
-    const depth = Number.isFinite(parsedDepth) && parsedDepth > 0
-        ? parsedDepth
-        : DEFAULTS.DEFAULT_RELIEF_DEPTH_MM;
+    const depthInput = input.depth;
+    let depth = DEFAULTS.DEFAULT_RELIEF_DEPTH_MM;
+    const hasDepthInput = depthInput !== undefined
+        && depthInput !== null
+        && !(typeof depthInput === 'string' && depthInput.trim() === '');
+    if (hasDepthInput) {
+        const parsedDepth = parseNumberLike(depthInput);
+        if (!Number.isFinite(parsedDepth) || parsedDepth <= 0 || parsedDepth > MAX_RELIEF_DEPTH_MM) {
+            return {
+                isValid: false,
+                response: {
+                    success: false,
+                    error: `Invalid depth value. Allowed range: 0 < depth <= ${MAX_RELIEF_DEPTH_MM} mm.`,
+                    errorCode: 'INVALID_DEPTH'
+                }
+            };
+        }
+
+        depth = parsedDepth;
+    }
 
     let infillRaw = Number.parseInt(input.infill, 10);
     if (Number.isNaN(infillRaw)) infillRaw = DEFAULTS.DEFAULT_INFIL_PERCENT;

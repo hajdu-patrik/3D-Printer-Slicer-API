@@ -2,23 +2,24 @@
  * Shared client IP resolution utility for request logging and rate-limiting.
  */
 
-const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+/**
+ * Normalize IPv6-mapped IPv4 addresses for cleaner log output.
+ * @param {string} ip Candidate IP string.
+ * @returns {string} Normalized IP string.
+ */
+function normalizeIp(ip) {
+    if (!ip) return 'unknown';
+    return ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+}
 
 /**
  * Resolve request origin IP.
- * Only trusts X-Forwarded-For when TRUST_PROXY=true is explicitly configured.
+ * Trust behavior is controlled by Express `trust proxy` setting configured at app bootstrap.
  * @param {import('express').Request} req Express request object.
  * @returns {string} Client IP string.
  */
 function getClientIp(req) {
-    if (TRUST_PROXY) {
-        const forwarded = req.headers['x-forwarded-for'];
-        if (typeof forwarded === 'string' && forwarded.length > 0) {
-            return forwarded.split(',')[0].trim();
-        }
-    }
-
-    return req.ip || req.socket?.remoteAddress || 'unknown';
+    return normalizeIp(req.ip || req.socket?.remoteAddress || 'unknown');
 }
 
 module.exports = {

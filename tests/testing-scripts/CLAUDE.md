@@ -1,6 +1,6 @@
 # Testing Scripts - Local Claude Guide
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Scope
 This folder contains API-level Python integration and workflow tests.
@@ -28,6 +28,10 @@ Located in tests/testing-scripts/common/:
 ## Reporting Contract
 All test outputs must be written to tests/testing-scripts/results/.
 After execution, always read the generated markdown report file.
+
+## Execution Policy
+- Prefer Docker-based API runtime for integration validations.
+- Keep test runners deterministic and avoid changing endpoint contracts through tests.
 
 ## Runtime Inputs
 - SLICER_BASE_URL from .env, fallback to default local base URL.

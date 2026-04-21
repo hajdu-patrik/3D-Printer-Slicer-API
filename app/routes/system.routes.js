@@ -7,7 +7,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { APP_ROOT, OUTPUT_DIR, PRUSA_CONFIGS_DIR, ORCA_CONFIGS_DIR } = require('../config/paths');
+const { PYTHON_EXECUTABLE } = require('../config/python');
 const requireAdmin = require('../middleware/requireAdmin');
+const { adminRateLimiter } = require('../middleware/rateLimit');
+const { getClientIp } = require('../utils/client-ip');
 const { getQueueStatus } = require('../services/slice/queue');
 
 const router = express.Router();
@@ -21,6 +24,17 @@ const ALLOWED_OUTPUT_EXTENSIONS = new Set(['.gcode', '.sl1']);
 function isAllowedOutputFileName(fileName) {
     if (!fileName || fileName.includes('/') || fileName.includes('\\')) return false;
     return ALLOWED_OUTPUT_EXTENSIONS.has(path.extname(fileName).toLowerCase());
+}
+
+/**
+ * Verify that a candidate path resolves inside an allowed parent directory.
+ * @param {string} parentPath Trusted parent path.
+ * @param {string} candidatePath Candidate path.
+ * @returns {boolean} True when candidate is inside parent.
+ */
+function isPathWithin(parentPath, candidatePath) {
+    const relative = path.relative(parentPath, candidatePath);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 /**
@@ -39,11 +53,10 @@ router.get('/health', (req, res) => {
  */
 async function checkPythonAvailability() {
     return new Promise((resolve) => {
-        const pythonExe = process.env.PYTHON_EXECUTABLE || 'python3';
         let output = '';
         let isResolved = false;
 
-        const proc = spawn(pythonExe, ['--version'], {
+        const proc = spawn(PYTHON_EXECUTABLE, ['--version'], {
             stdio: ['ignore', 'pipe', 'pipe'],
             timeout: 2000
         });
@@ -93,7 +106,7 @@ async function checkPythonAvailability() {
  * @param {import('express').Response} res Express response object.
  * @returns {Promise<import('express').Response>}
  */
-router.get('/health/detailed', requireAdmin, async (req, res) => {
+router.get('/health/detailed', adminRateLimiter, requireAdmin, async (req, res) => {
     try {
         const timestamp = new Date().toISOString();
         const uptime = process.uptime();
@@ -163,7 +176,7 @@ router.get('/favicon.ico', (req, res) => {
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response}
  */
-router.get('/admin/output-files', requireAdmin, (req, res) => {
+router.get('/admin/output-files', adminRateLimiter, requireAdmin, (req, res) => {
     try {
         const entries = fs
             .readdirSync(OUTPUT_DIR, { withFileTypes: true })
@@ -212,7 +225,7 @@ router.get('/admin/output-files', requireAdmin, (req, res) => {
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response | void}
  */
-router.get('/admin/download/:fileName', requireAdmin, (req, res) => {
+router.get('/admin/download/:fileName', adminRateLimiter, requireAdmin, (req, res) => {
     const fileName = String(req.params.fileName || '');
 
     if (!isAllowedOutputFileName(fileName)) {
@@ -224,8 +237,8 @@ router.get('/admin/download/:fileName', requireAdmin, (req, res) => {
     }
 
     const resolvedOutputDir = path.resolve(OUTPUT_DIR);
-    const filePath = path.resolve(path.join(resolvedOutputDir, fileName));
-    if (path.relative(resolvedOutputDir, filePath).startsWith('..')) {
+    const requestedPath = path.resolve(path.join(resolvedOutputDir, fileName));
+    if (!isPathWithin(resolvedOutputDir, requestedPath)) {
         return res.status(400).json({
             success: false,
             error: 'Invalid output file path.',
@@ -233,7 +246,7 @@ router.get('/admin/download/:fileName', requireAdmin, (req, res) => {
         });
     }
 
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(requestedPath)) {
         return res.status(404).json({
             success: false,
             error: 'Output file not found.',
@@ -241,7 +254,51 @@ router.get('/admin/download/:fileName', requireAdmin, (req, res) => {
         });
     }
 
-    return res.download(filePath, fileName, (error_) => {
+    let requestedFileStats;
+    try {
+        requestedFileStats = fs.lstatSync(requestedPath);
+    } catch {
+        return res.status(404).json({
+            success: false,
+            error: 'Output file not found.',
+            errorCode: 'OUTPUT_FILE_NOT_FOUND'
+        });
+    }
+
+    if (!requestedFileStats.isFile() || requestedFileStats.isSymbolicLink()) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid output file target.',
+            errorCode: 'INVALID_OUTPUT_FILE_TARGET'
+        });
+    }
+
+    let resolvedOutputDirRealPath;
+    let resolvedFileRealPath;
+    try {
+        resolvedOutputDirRealPath = fs.realpathSync(resolvedOutputDir);
+        resolvedFileRealPath = fs.realpathSync(requestedPath);
+    } catch {
+        return res.status(404).json({
+            success: false,
+            error: 'Output file not found.',
+            errorCode: 'OUTPUT_FILE_NOT_FOUND'
+        });
+    }
+
+    if (!isPathWithin(resolvedOutputDirRealPath, resolvedFileRealPath)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid output file path.',
+            errorCode: 'INVALID_OUTPUT_FILE_PATH'
+        });
+    }
+
+    const clientIp = getClientIp(req);
+    const requestId = req.requestId || 'n/a';
+    console.log(`[ADMIN DOWNLOAD] ${fileName} requested by ${clientIp} (requestId=${requestId})`);
+
+    return res.download(resolvedFileRealPath, fileName, (error_) => {
         if (error_ && !res.headersSent) {
             res.status(500).json({
                 success: false,

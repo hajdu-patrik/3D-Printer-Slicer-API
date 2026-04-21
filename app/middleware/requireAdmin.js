@@ -39,7 +39,8 @@ function requireAdmin(req, res, next) {
     const apiKey = String(req.header('x-api-key') || '').trim();
     if (!apiKey || !timingSafeCompare(apiKey, adminApiKey)) {
         const clientIp = getClientIp(req);
-        console.warn(`[SECURITY WARNING] Unauthorized pricing access attempt from ${clientIp} on ${req.method} ${req.originalUrl}`);
+        const requestId = req.requestId || 'n/a';
+        console.warn(`[SECURITY WARNING] Unauthorized admin access attempt from ${clientIp} on ${req.method} ${req.originalUrl} (requestId=${requestId})`);
         return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
     next();

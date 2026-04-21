@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { OUTPUT_DIR } = require('../config/paths');
+const { getClientIp } = require('../utils/client-ip');
 const { getRate } = require('./pricing.service');
 const { enqueueSliceJob } = require('./slice/queue');
 const { runCommand } = require('./slice/command');
@@ -57,6 +58,14 @@ function createQueueErrorResponse(err, res) {
         });
     }
 
+    if (err.message.startsWith('QUEUE_CLIENT_LIMIT|')) {
+        return res.status(429).json({
+            success: false,
+            error: err.message.split('|')[1],
+            errorCode: 'SLICE_QUEUE_CLIENT_LIMIT'
+        });
+    }
+
     return res.status(500).json({
         success: false,
         error: 'Queue processing failed.',
@@ -70,7 +79,7 @@ function createQueueErrorResponse(err, res) {
  * @returns {import('multer').File | null} Uploaded file descriptor when present.
  */
 function findUploadedModelFile(req) {
-    return req.file && req.file.fieldname === 'choosenFile' ? req.file : null;
+    return req.file?.fieldname === 'choosenFile' ? req.file : null;
 }
 
 /**
@@ -378,10 +387,11 @@ async function processSlice(req, res, options = {}) {
  */
 async function handleSlicePrusa(req, res) {
     try {
+        const clientQueueKey = getClientIp(req);
         return await enqueueSliceJob(() => processSlice(req, res, {
             forcedTechnology: null,
             engine: 'prusa'
-        }));
+        }), { queueKey: clientQueueKey });
     } catch (err) {
         return createQueueErrorResponse(err, res);
     }
@@ -395,10 +405,11 @@ async function handleSlicePrusa(req, res) {
  */
 async function handleSliceOrca(req, res) {
     try {
+        const clientQueueKey = getClientIp(req);
         return await enqueueSliceJob(() => processSlice(req, res, {
             forcedTechnology: 'FDM',
             engine: 'orca'
-        }));
+        }), { queueKey: clientQueueKey });
     } catch (err) {
         return createQueueErrorResponse(err, res);
     }

@@ -5,6 +5,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const { randomUUID } = require('node:crypto');
 const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 const createSwaggerDocument = require('./docs/swagger-docs');
@@ -31,7 +32,17 @@ const app = express();
 
 const standardHelmet = helmet();
 const docsHelmet = helmet({
-    contentSecurityPolicy: false
+    contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+            defaultSrc: ["'self'"],
+            imgSrc: ["'self'", 'data:', 'https:'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https:'],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'https:'],
+            connectSrc: ["'self'", 'https:'],
+            fontSrc: ["'self'", 'data:', 'https:']
+        }
+    }
 });
 
 /**
@@ -39,14 +50,36 @@ const docsHelmet = helmet({
  * @param {string | undefined} value Raw environment value.
  * @returns {string[]} Normalized origins.
  */
-function parseAllowedOrigins(value) {
+function parseCsvValues(value) {
     return String(value || '')
         .split(',')
         .map((origin) => origin.trim())
         .filter(Boolean);
 }
 
-const adminAllowedOrigins = parseAllowedOrigins(process.env.ADMIN_CORS_ALLOWED_ORIGINS);
+const adminAllowedOrigins = parseCsvValues(process.env.ADMIN_CORS_ALLOWED_ORIGINS);
+
+/**
+ * Resolve Express trust proxy setting from environment.
+ * TRUST_PROXY must be explicitly set to `true` to trust forwarded headers.
+ * @returns {false | string[]}
+ */
+function resolveTrustProxySetting() {
+    if (process.env.TRUST_PROXY !== 'true') {
+        return false;
+    }
+
+    const trustedCidrs = parseCsvValues(process.env.TRUST_PROXY_CIDRS);
+    if (trustedCidrs.length > 0) {
+        return trustedCidrs;
+    }
+
+    console.warn('[SECURITY] TRUST_PROXY=true but TRUST_PROXY_CIDRS is empty; falling back to loopback-only proxy trust.');
+    return ['loopback'];
+}
+
+const trustProxySetting = resolveTrustProxySetting();
+app.set('trust proxy', trustProxySetting);
 
 /**
  * Resolve dynamic CORS options for public and admin endpoints.
@@ -90,6 +123,14 @@ app.use((req, res, next) => {
 });
 
 app.use(cors(resolveCorsOptions));
+
+app.use((req, res, next) => {
+    const requestId = String(req.header('x-request-id') || randomUUID());
+    req.requestId = requestId;
+    res.setHeader('X-Request-Id', requestId);
+    next();
+});
+
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || DEFAULTS.JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: false, limit: process.env.FORM_BODY_LIMIT || DEFAULTS.FORM_BODY_LIMIT }));
 

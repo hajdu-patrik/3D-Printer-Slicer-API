@@ -4,7 +4,7 @@ applyTo: "**"
 
 # Repository Wide Instructions
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Architecture
 - Backend stack is Node.js + Express + Python helper scripts.
@@ -21,8 +21,11 @@ Last synchronized: 2026-04-08
 ## Security
 - ADMIN_API_KEY is mandatory at startup.
 - Admin routes require x-api-key header (timing-safe comparison).
-- X-Forwarded-For is only trusted when TRUST_PROXY=true is explicitly configured.
-- Unauthorized admin access logging must use forwarded-header-aware client IP parsing.
+- Admin routes are IP-rate-limited to reduce brute-force API key attempts.
+- X-Forwarded-For is only trusted when TRUST_PROXY=true and TRUST_PROXY_CIDRS is configured.
+- Unauthorized admin access logging must include requestId + forwarded-header-aware client IP parsing.
+- Python executable resolution must use absolute validated paths (PYTHON_EXECUTABLE or trusted fallbacks).
+- Admin output download must preserve extension allowlist and path/symlink containment checks.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation.
 

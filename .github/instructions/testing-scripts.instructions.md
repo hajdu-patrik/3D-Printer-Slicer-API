@@ -4,7 +4,7 @@ applyTo: "tests/testing-scripts/**"
 
 # Testing Scripts Instructions
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Test Entry Points
 - full_api_test_runner.py
@@ -18,6 +18,10 @@ Last synchronized: 2026-04-08
 ## Reporting Rules
 - Write reports to tests/testing-scripts/results/.
 - After running tests, read markdown reports and summarize outcomes.
+
+## Execution Rules
+- Prefer Docker-based API runtime for endpoint integration checks.
+- Keep queue/rate-limit regression checks in dedicated runners.
 
 ## Environment Inputs
 - SLICER_BASE_URL

@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -61,27 +61,46 @@ Admin-protected endpoints (x-api-key required):
 - ADMIN_API_KEY must exist or server startup is refused.
 - Admin operations must pass x-api-key header matching ADMIN_API_KEY.
 - Admin API key comparison uses crypto.timingSafeEqual (constant-time).
-- Admin authorization logging resolves client IP with forwarded-header-aware parsing (requires TRUST_PROXY=true).
-- X-Forwarded-For is only trusted when TRUST_PROXY=true is explicitly configured.
+- Admin authorization failures are rate-limited and logged with requestId + resolved client IP.
+- X-Forwarded-For is only trusted when TRUST_PROXY=true and TRUST_PROXY_CIDRS is configured.
 - Browser-origin requests to /admin/* must match ADMIN_CORS_ALLOWED_ORIGINS.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
+- /admin/download/:fileName must pass filename extension validation (.gcode/.sl1), path containment checks, lstat non-symlink checks, and realpath containment checks.
 - Fail-fast geometry policy: invalid geometry returns INVALID_SOURCE_GEOMETRY.
 - No automatic model healing/correction is allowed.
 
 ## Queue and Rate Protection
 Defaults:
 - Slicing rate limit: 3 requests per 60 seconds per IP
+- Admin rate limit: 30 requests per 60 seconds per IP
 - Max concurrent slice jobs: 1
 - Max queue length: 100
+- Max queued+active slice jobs per client IP: 5
 - Max queue wait: 300000 ms
 - Slice command timeout: 600000 ms (10 minutes)
 
+Behavior:
+- Slice and admin rate limit responses return HTTP 429 with Retry-After and retryAfterSeconds.
+- Expired in-memory rate-limit buckets are cleaned periodically at max(windowMs * 2, 60000).
+- Queue overflow returns SLICE_QUEUE_FULL (HTTP 503).
+- Per-client queue cap returns SLICE_QUEUE_CLIENT_LIMIT (HTTP 429).
+- Queue wait timeout returns SLICE_QUEUE_TIMEOUT (HTTP 503).
+
 Return and preserve queue/rate errors:
 - RATE_LIMIT_EXCEEDED
+- ADMIN_RATE_LIMIT_EXCEEDED
 - SLICE_QUEUE_FULL
+- SLICE_QUEUE_CLIENT_LIMIT
 - SLICE_QUEUE_TIMEOUT
 - FILE_PROCESSING_TIMEOUT
+
+## Python Runtime Resolution
+- PYTHON_EXECUTABLE (optional) must be an absolute path and must exist when provided.
+- If PYTHON_EXECUTABLE is not set, runtime resolution checks VIRTUAL_ENV/bin/python3 and VIRTUAL_ENV/Scripts/python.exe.
+- Additional absolute-path fallbacks: /opt/venv/bin/python3, /usr/local/bin/python3, /usr/bin/python3.
+- Startup fails fast when no valid absolute Python executable can be resolved.
+- DEBUG_COMMAND_LOGS=true enables converter/slicer stdout/stderr command logging.
 
 ## Engine Boundaries
 Prusa:
@@ -104,17 +123,26 @@ Core keys from .env:
 - MAX_UPLOAD_BYTES
 - SLICE_RATE_LIMIT_WINDOW_MS
 - SLICE_RATE_LIMIT_MAX_REQUESTS
+- ADMIN_RATE_LIMIT_WINDOW_MS
+- ADMIN_RATE_LIMIT_MAX_REQUESTS
 - MAX_CONCURRENT_SLICES
 - MAX_SLICE_QUEUE_LENGTH
+- MAX_SLICE_QUEUE_PER_IP
 - MAX_SLICE_QUEUE_WAIT_MS
 - MAX_ZIP_ENTRIES
 - MAX_ZIP_UNCOMPRESSED_BYTES
 - SLICE_COMMAND_TIMEOUT_MS
+- DEFAULT_RELIEF_DEPTH_MAX_MM
+- DEBUG_COMMAND_LOGS
+- PYTHON_EXECUTABLE
+- VIRTUAL_ENV
 - ORCA_MACHINE_PROFILE
 - ORCA_PROCESS_PROFILE_0_1
 - ORCA_PROCESS_PROFILE_0_2
 - ORCA_PROCESS_PROFILE_0_3
 - TRUST_PROXY
+- TRUST_PROXY_CIDRS
+- SLICER_BASE_URL
 
 ## Testing Policy
 Use Python test runners in tests/testing-scripts/.

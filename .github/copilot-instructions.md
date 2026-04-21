@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Copilot Instructions
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Architecture Notice
 This project uses both GitHub Copilot and Claude as primary agentic tools.
@@ -59,10 +59,19 @@ Admin protected (x-api-key):
 
 ## Queue and Rate Defaults
 - 3 requests / 60s / IP for slicing routes
+- 30 requests / 60s / IP for admin routes
 - MAX_CONCURRENT_SLICES default: 1
 - MAX_SLICE_QUEUE_LENGTH default: 100
+- MAX_SLICE_QUEUE_PER_IP default: 5
 - MAX_SLICE_QUEUE_WAIT_MS default: 300000
 - Slice command timeout default: 600000 ms
+
+## Queue and Rate Behavior Details
+- Slice and admin throttling return HTTP 429 with Retry-After and retryAfterSeconds.
+- Expired in-memory rate-limit buckets are periodically removed at max(windowMs * 2, 60000).
+- Queue overflow returns SLICE_QUEUE_FULL (HTTP 503).
+- Per-client queue cap returns SLICE_QUEUE_CLIENT_LIMIT (HTTP 429).
+- Queue wait timeout returns SLICE_QUEUE_TIMEOUT (HTTP 503).
 
 ## Engine Boundaries
 Prusa:
@@ -79,11 +88,19 @@ Orca:
 - ADMIN_API_KEY must be present at startup.
 - Admin routes require x-api-key equal to ADMIN_API_KEY.
 - Admin API key comparison uses crypto.timingSafeEqual (constant-time).
-- Admin middleware resolves client IP with forwarded-header-aware parsing (requires TRUST_PROXY=true).
-- X-Forwarded-For is only trusted when TRUST_PROXY=true is explicitly configured.
+- Admin middleware applies rate limiting and logs failures with requestId + resolved client IP.
+- X-Forwarded-For is only trusted when TRUST_PROXY=true and TRUST_PROXY_CIDRS is configured.
 - Browser-origin requests to /admin/* are restricted through ADMIN_CORS_ALLOWED_ORIGINS.
+- /admin/download/:fileName must enforce extension validation, path containment checks, non-symlink checks, and realpath containment checks.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
+
+## Python Runtime Resolution
+- PYTHON_EXECUTABLE is optional but must be an existing absolute path when set.
+- Fallback resolution checks VIRTUAL_ENV/bin/python3 and VIRTUAL_ENV/Scripts/python.exe.
+- Additional fallback candidates are absolute paths: /opt/venv/bin/python3, /usr/local/bin/python3, /usr/bin/python3.
+- Server startup fails if no valid absolute Python executable can be resolved.
+- DEBUG_COMMAND_LOGS=true enables verbose subprocess command logging.
 
 ## Preferred Skills
 Skills (thin command references pointing to agent definitions):
@@ -114,17 +131,26 @@ After every test run, read the generated markdown report under tests/testing-scr
 - MAX_UPLOAD_BYTES
 - SLICE_RATE_LIMIT_WINDOW_MS
 - SLICE_RATE_LIMIT_MAX_REQUESTS
+- ADMIN_RATE_LIMIT_WINDOW_MS
+- ADMIN_RATE_LIMIT_MAX_REQUESTS
 - MAX_CONCURRENT_SLICES
 - MAX_SLICE_QUEUE_LENGTH
+- MAX_SLICE_QUEUE_PER_IP
 - MAX_SLICE_QUEUE_WAIT_MS
 - MAX_ZIP_ENTRIES
 - MAX_ZIP_UNCOMPRESSED_BYTES
 - SLICE_COMMAND_TIMEOUT_MS
+- DEFAULT_RELIEF_DEPTH_MAX_MM
+- DEBUG_COMMAND_LOGS
+- PYTHON_EXECUTABLE
+- VIRTUAL_ENV
 - ORCA_MACHINE_PROFILE
 - ORCA_PROCESS_PROFILE_0_1
 - ORCA_PROCESS_PROFILE_0_2
 - ORCA_PROCESS_PROFILE_0_3
 - TRUST_PROXY
+- TRUST_PROXY_CIDRS
+- SLICER_BASE_URL
 
 ## Documentation Layout
 Global:

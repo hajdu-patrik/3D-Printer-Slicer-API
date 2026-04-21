@@ -52,16 +52,20 @@ WORKDIR /tmp
 
 ARG PRUSA_APPIMAGE_URL="https://github.com/prusa3d/PrusaSlicer/releases/download/version_2.8.1/PrusaSlicer-2.8.1+linux-x64-newer-distros-GTK3-202409181416.AppImage"
 ARG ORCA_APPIMAGE_URL="https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.3.1/OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.3.1.AppImage"
+ARG PRUSA_APPIMAGE_SHA256="565f2f4bd4dbb05904a459d54db1916b6932124709c1d17b5aacfe9f5f2f1b03"
+ARG ORCA_APPIMAGE_SHA256="f199e5408914efdbbbfa4fd6752cd6ad4727209b488bc47bff9a0da5f053a701"
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates wget \
     && wget -q "$PRUSA_APPIMAGE_URL" -O PrusaSlicer.AppImage \
+    && echo "$PRUSA_APPIMAGE_SHA256  PrusaSlicer.AppImage" | sha256sum -c - \
     && chmod +x PrusaSlicer.AppImage \
     && ./PrusaSlicer.AppImage --appimage-extract \
     && mv squashfs-root prusa-squashfs-root \
     && wget -q "$ORCA_APPIMAGE_URL" -O OrcaSlicer.AppImage \
+    && echo "$ORCA_APPIMAGE_SHA256  OrcaSlicer.AppImage" | sha256sum -c - \
     && chmod +x OrcaSlicer.AppImage \
     && ./OrcaSlicer.AppImage --appimage-extract \
     && mv squashfs-root orca-squashfs-root

@@ -73,6 +73,56 @@ Public endpoints do not require admin key.
 
 ---
 
+## 🧩 Application Module Map (app/*.js)
+
+### Bootstrap
+
+- `app/server.js` - Express bootstrap, startup guards, helmet/cors, request-id propagation, docs mounting, routes, and global error handling.
+
+### Configuration
+
+- `app/config/constants.js` - runtime defaults, layer presets, limits, and extension groups.
+- `app/config/paths.js` - root-scoped runtime path resolution (`input/`, `output/`, `configs/`) and directory creation.
+- `app/config/python.js` - secure Python executable resolver (`PYTHON_EXECUTABLE` + `VIRTUAL_ENV` fallbacks).
+
+### Middleware
+
+- `app/middleware/rateLimit.js` - in-memory IP throttling for slice and admin routes (`Retry-After` aware responses).
+- `app/middleware/requireAdmin.js` - timing-safe x-api-key guard + unauthorized attempt logging.
+- `app/middleware/errorHandler.js` - centralized request/upload/parser error normalization.
+
+### Routes
+
+- `app/routes/slice.routes.js` - `POST /prusa/slice`, `POST /orca/slice` with rate-limit and single-file upload middleware.
+- `app/routes/pricing.routes.js` - public pricing read + admin pricing mutations.
+- `app/routes/system.routes.js` - health endpoints and admin artifact listing/download endpoints.
+
+### Services
+
+- `app/services/pricing.service.js` - pricing load/save/migration/lookup logic.
+- `app/services/slice.service.js` - end-to-end slicing orchestrator and queue error mapping.
+- `app/services/slice/command.js` - subprocess execution via `execFile` with timeout and optional debug logs.
+- `app/services/slice/common.js` - output naming, isolated Orca output dirs, cleanup utilities.
+- `app/services/slice/engine.js` - slicer argument construction (Prusa vs Orca).
+- `app/services/slice/errors.js` - error classification and API error responses.
+- `app/services/slice/input-processing.js` - conversion/orientation preprocessing pipeline.
+- `app/services/slice/model-stats.js` - metadata/stat parsing from slicer outputs.
+- `app/services/slice/number-utils.js` - shared numeric parser helpers.
+- `app/services/slice/options.js` - strict request option validation/parsing.
+- `app/services/slice/profiles.js` - profile selection, runtime profile generation, build-volume limits.
+- `app/services/slice/queue.js` - FIFO queue + per-client fairness + timeout enforcement.
+- `app/services/slice/transform.js` - transform planning/execution and bounds validation.
+- `app/services/slice/value-parsers.js` - safe parsing and profile filename sanitization.
+- `app/services/slice/zip.js` - ZIP safety inspection and safe extraction.
+
+### Utilities and API docs
+
+- `app/utils/client-ip.js` - trust-proxy-aware client IP normalization.
+- `app/utils/logger.js` - structured processing error logging.
+- `app/docs/swagger-docs.js` - OpenAPI generation for `/docs` and `/openapi.json`.
+
+---
+
 ## 🧠 Slicing API Behavior
 
 Both slicing endpoints accept `multipart/form-data` with required file field:
@@ -92,6 +142,8 @@ Optional fields:
 - `rotationX`, `rotationY`, `rotationZ` (degrees)
 - `printerProfile` (profile override filename)
 - `processProfile` (Orca only process profile override filename)
+
+`depth` must be within `0 < depth <= DEFAULT_RELIEF_DEPTH_MAX_MM` (default `25mm`).
 
 ### `POST /prusa/slice`
 
@@ -236,12 +288,14 @@ curl -X POST http://localhost:3000/orca/slice \
 - `INVALID_MATERIAL_FOR_TECHNOLOGY`
 - `MATERIAL_TECHNOLOGY_MISMATCH`
 - `RATE_LIMIT_EXCEEDED`
+- `ADMIN_RATE_LIMIT_EXCEEDED`
 - `INVALID_SOURCE_ARCHIVE`
 - `INVALID_SOURCE_GEOMETRY`
 - `UNSUPPORTED_FILE_FORMAT`
 - `ORCA_PROFILE_INCOMPATIBLE`
 - `INVALID_SIZE_UNIT`
 - `INVALID_KEEP_PROPORTIONS`
+- `INVALID_DEPTH`
 - `INVALID_SIZE_OPTIONS`
 - `INVALID_ROTATION_OPTIONS`
 - `CONFLICTING_SIZE_OPTIONS`
@@ -251,9 +305,19 @@ curl -X POST http://localhost:3000/orca/slice \
 - `MODEL_OUT_OF_PRINTER_BOUNDS`
 - `FILE_PROCESSING_TIMEOUT`
 - `SLICE_QUEUE_FULL`
+- `SLICE_QUEUE_CLIENT_LIMIT`
 - `SLICE_QUEUE_TIMEOUT`
 - `QUEUE_INTERNAL_ERROR`
 - `INTERNAL_PROCESSING_ERROR`
+
+### Queue and rate-limit response semantics
+
+- `RATE_LIMIT_EXCEEDED` -> HTTP `429`, includes `Retry-After` and `retryAfterSeconds`.
+- `ADMIN_RATE_LIMIT_EXCEEDED` -> HTTP `429`, includes `Retry-After` and `retryAfterSeconds`.
+- `SLICE_QUEUE_FULL` -> HTTP `503`.
+- `SLICE_QUEUE_CLIENT_LIMIT` -> HTTP `429`.
+- `SLICE_QUEUE_TIMEOUT` -> HTTP `503`.
+- `FILE_PROCESSING_TIMEOUT` -> HTTP `422`.
 
 ---
 
@@ -414,8 +478,10 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Timing-Safe Auth:** Admin API key comparison uses constant-time comparison to prevent timing side-channel attacks.
 - **Upload Validation:** Multer accepts only a single file on the `choosenFile` field with file extension validation at upload time.
 - **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`). Expired rate-limit buckets are automatically pruned.
-- **Proxy Trust:** Set `TRUST_PROXY=true` in `.env` when deployed behind a reverse proxy (Nginx, Cloudflare) so `X-Forwarded-For` is used for IP resolution. Disabled by default to prevent IP spoofing.
+- **Admin Rate Limit:** Admin endpoints are IP-rate-limited (default `30` requests / `60s`) to reduce brute-force API-key attempts.
+- **Proxy Trust:** Set `TRUST_PROXY=true` only behind a reverse proxy and configure `TRUST_PROXY_CIDRS` to trusted proxy CIDRs/names; forwarded headers are ignored otherwise.
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
+- **Queue Fairness:** Per-client queue ownership is bounded (`MAX_SLICE_QUEUE_PER_IP`) so one client cannot monopolize all pending capacity.
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
 - **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `500MB`).
 - **ZIP Safety Limits:** ZIP extraction is guarded by max entries (`MAX_ZIP_ENTRIES`, default `10`) and max cumulative extracted size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
@@ -424,6 +490,51 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
 - **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
+- **Supply-Chain Integrity:** Docker build pins and verifies SHA256 checksums for downloaded PrusaSlicer and OrcaSlicer AppImages.
+- **Python Resolver Security:** `PYTHON_EXECUTABLE` must be absolute and existing when set; fallback resolution uses `VIRTUAL_ENV` and known absolute runtime paths.
+- **Command Debugging:** `DEBUG_COMMAND_LOGS=true` enables verbose converter/slicer stdout/stderr logging.
+
+---
+
+## 📝 Security and Runtime Change Snapshot (2026-04-21)
+
+This repository currently includes the following synchronized changes across implementation and docs:
+
+1. **Admin security hardening**
+- Mandatory startup guard for `ADMIN_API_KEY`.
+- Timing-safe API key verification for admin routes.
+- Request-id-aware unauthorized logging.
+
+2. **Rate-limit controls**
+- Dedicated admin limiter (`ADMIN_RATE_LIMIT_EXCEEDED`).
+- Public slicing limiter (`RATE_LIMIT_EXCEEDED`).
+- Retry-After-aware 429 responses.
+
+3. **Proxy trust controls**
+- Forwarded header trust only when `TRUST_PROXY=true` and `TRUST_PROXY_CIDRS` is configured.
+- Shared normalized client IP resolution.
+
+4. **Queue fairness and resilience**
+- FIFO queue with bounded concurrency.
+- Per-client queued+active cap (`MAX_SLICE_QUEUE_PER_IP`).
+- Queue wait timeout and explicit queue error codes.
+
+5. **Admin output download hardening**
+- Extension allowlist (`.gcode`, `.sl1`).
+- Path containment checks, non-symlink checks, and realpath containment checks.
+
+6. **Python subprocess execution hardening**
+- Centralized Python executable resolution.
+- Absolute-path validation and startup fail-fast behavior.
+- Shared secure subprocess execution path for converter/orientation/transform scripts.
+
+7. **Docker supply-chain validation**
+- Build-time SHA256 verification for slicer AppImages.
+
+8. **Documentation synchronization**
+- Global guides (`CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`).
+- Folder-local guides (`app/CLAUDE.md`, `configs/CLAUDE.md`, `tests/testing-scripts/CLAUDE.md`).
+- Instruction overlays under `.github/instructions/*`.
 
 ---
 

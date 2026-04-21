@@ -4,6 +4,8 @@
 
 const express = require('express');
 const requireAdmin = require('../middleware/requireAdmin');
+const { adminRateLimiter } = require('../middleware/rateLimit');
+const { getClientIp } = require('../utils/client-ip');
 const {
     getPricing,
     savePricingToDisk,
@@ -43,7 +45,9 @@ function createMaterialForTechnology(req, res, technology) {
         return res.status(500).json({ success: false, error: 'Failed to persist pricing update.' });
     }
 
-    console.log(`[PRICING UPDATE] ${technology}.${materialKey} created at ${price} HUF/hour`);
+    const clientIp = getClientIp(req);
+    const requestId = req.requestId || 'n/a';
+    console.log(`[PRICING UPDATE] ${technology}.${materialKey} created at ${price} HUF/hour by ${clientIp} (requestId=${requestId})`);
     return res.status(201).json({
         success: true,
         technology,
@@ -69,7 +73,7 @@ router.get('/pricing', (req, res) => {
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response}
  */
-router.post('/pricing/FDM', requireAdmin, (req, res) => createMaterialForTechnology(req, res, 'FDM'));
+router.post('/pricing/FDM', adminRateLimiter, requireAdmin, (req, res) => createMaterialForTechnology(req, res, 'FDM'));
 
 /**
  * Create a new SLA material.
@@ -77,7 +81,7 @@ router.post('/pricing/FDM', requireAdmin, (req, res) => createMaterialForTechnol
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response}
  */
-router.post('/pricing/SLA', requireAdmin, (req, res) => createMaterialForTechnology(req, res, 'SLA'));
+router.post('/pricing/SLA', adminRateLimiter, requireAdmin, (req, res) => createMaterialForTechnology(req, res, 'SLA'));
 
 /**
  * Update an existing material hourly pricing entry.
@@ -86,7 +90,7 @@ router.post('/pricing/SLA', requireAdmin, (req, res) => createMaterialForTechnol
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response}
  */
-router.patch('/pricing/:technology/:material', requireAdmin, (req, res) => {
+router.patch('/pricing/:technology/:material', adminRateLimiter, requireAdmin, (req, res) => {
     const technology = normalizeTechnology(req.params.technology);
     if (!technology) {
         return res.status(400).json({ success: false, error: 'Technology must be FDM or SLA.' });
@@ -116,7 +120,9 @@ router.patch('/pricing/:technology/:material', requireAdmin, (req, res) => {
         return res.status(500).json({ success: false, error: 'Failed to persist pricing update.' });
     }
 
-    console.log(`[PRICING UPDATE] ${technology}.${materialKey} updated to ${price} HUF/hour`);
+    const clientIp = getClientIp(req);
+    const requestId = req.requestId || 'n/a';
+    console.log(`[PRICING UPDATE] ${technology}.${materialKey} updated to ${price} HUF/hour by ${clientIp} (requestId=${requestId})`);
     return res.status(200).json({
         success: true,
         technology,
@@ -131,7 +137,7 @@ router.patch('/pricing/:technology/:material', requireAdmin, (req, res) => {
  * @param {import('express').Response} res Express response object.
  * @returns {import('express').Response}
  */
-router.delete('/pricing/:technology/:material', requireAdmin, (req, res) => {
+router.delete('/pricing/:technology/:material', adminRateLimiter, requireAdmin, (req, res) => {
     const technology = normalizeTechnology(req.params.technology);
     if (!technology) {
         return res.status(400).json({ success: false, error: 'Technology must be FDM or SLA.' });
@@ -153,7 +159,9 @@ router.delete('/pricing/:technology/:material', requireAdmin, (req, res) => {
         return res.status(500).json({ success: false, error: 'Failed to persist pricing update.' });
     }
 
-    console.log(`[PRICING UPDATE] ${technology}.${materialKey} deleted`);
+    const clientIp = getClientIp(req);
+    const requestId = req.requestId || 'n/a';
+    console.log(`[PRICING UPDATE] ${technology}.${materialKey} deleted by ${clientIp} (requestId=${requestId})`);
     return res.status(200).json({
         success: true,
         technology,

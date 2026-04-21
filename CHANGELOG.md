@@ -2,6 +2,64 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.1.1 (2026-04-21)
+
+### Security Hardening
+
+- Added dedicated admin endpoint throttling (`ADMIN_RATE_LIMIT_EXCEEDED`) and applied it across all admin-protected routes.
+- Hardened admin artifact download path in `app/routes/system.routes.js`:
+  - strict extension allowlist (`.gcode`, `.sl1`)
+  - parent-path containment checks
+  - `lstat` non-symlink target enforcement
+  - `realpath` containment verification
+- Strengthened forwarded-header trust model:
+  - Express trust-proxy now resolved via `TRUST_PROXY` + `TRUST_PROXY_CIDRS`
+  - client IP resolution normalized and delegated to Express trust-proxy behavior
+- Added request correlation support with propagated `X-Request-Id` and requestId-aware admin/security logs.
+
+### Runtime and Queue Controls
+
+- Added per-client queue fairness cap (`MAX_SLICE_QUEUE_PER_IP`) to prevent single-client queue monopolization.
+- Added explicit queue error mapping for client cap violations (`SLICE_QUEUE_CLIENT_LIMIT`, HTTP 429).
+- Preserved bounded FIFO behavior with wait-time expiration (`SLICE_QUEUE_TIMEOUT`) and queue-cap protection (`SLICE_QUEUE_FULL`).
+- Added configurable admin rate-limit defaults and env controls:
+  - `ADMIN_RATE_LIMIT_WINDOW_MS`
+  - `ADMIN_RATE_LIMIT_MAX_REQUESTS`
+
+### Python Execution Safety
+
+- Introduced centralized Python runtime resolver in `app/config/python.js`.
+- Enforced absolute-path validation when `PYTHON_EXECUTABLE` is set.
+- Added safe fallback lookup via `VIRTUAL_ENV` and trusted absolute runtime paths.
+- Updated all converter/orientation/transform subprocess calls to use validated `PYTHON_EXECUTABLE`.
+
+### Request Validation
+
+- Added maximum relief-depth guard (`DEFAULT_RELIEF_DEPTH_MAX_MM`) and explicit `INVALID_DEPTH` validation response in option parsing.
+
+### Docker and Supply Chain
+
+- Added SHA256 verification for downloaded PrusaSlicer and OrcaSlicer AppImages during Docker build.
+
+### Documentation
+
+- Completed full documentation synchronization across:
+  - `CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`
+  - folder-local guides (`app/CLAUDE.md`, `configs/CLAUDE.md`, `tests/testing-scripts/CLAUDE.md`)
+  - instruction overlays in `.github/instructions/*`
+- Expanded `README.md` with:
+  - detailed `app/*.js` module map
+  - queue/rate-limit response semantics by HTTP status
+  - consolidated security/runtime change snapshot
+
+### Validation
+
+- Docker-first verification completed against running compose environment.
+- Integration test evidence (reports under `tests/testing-scripts/results/`):
+  - `pricing_cycle_test_result.md`: 12/12 success
+  - `admin_output_files_test_result.md`: pass
+  - `queue_concurrency_test_result.md`: 4/4 success
+
 ## v3.1.0 (2026-04-08)
 
 ### Security Hardening

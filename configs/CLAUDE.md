@@ -1,6 +1,6 @@
 # Configs Folder - Local Claude Guide
 
-Last synchronized: 2026-04-08
+Last synchronized: 2026-04-21
 
 ## Scope
 This folder contains runtime configuration files used by slicing and pricing.
@@ -33,3 +33,11 @@ This folder contains runtime configuration files used by slicing and pricing.
 - ORCA_PROCESS_PROFILE_0_1
 - ORCA_PROCESS_PROFILE_0_2
 - ORCA_PROCESS_PROFILE_0_3
+- PYTHON_EXECUTABLE
+- VIRTUAL_ENV
+- DEBUG_COMMAND_LOGS
+
+## Notes
+- Prusa runtime profiles are generated dynamically from base ini files and request options.
+- Orca runtime process profiles are generated dynamically from base json profiles and request options.
+- Profile overrides from requests are filename-only and sanitized before lookup.

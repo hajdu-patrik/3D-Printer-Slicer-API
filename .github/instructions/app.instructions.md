@@ -9,6 +9,7 @@ Last synchronized: 2026-04-21
 ## Responsibilities
 - app/server.js handles bootstrap, middleware, routes, docs, and static output serving.
 - app/routes should stay lightweight and delegate to services.
+- app/services/pricing.service.js remains the facade API; pricing persistence and pricing-domain logic live in app/services/pricing/ submodules.
 - app/services/slice/ contains modular pipeline logic (options, queue, transform, profiles, errors).
 - app/middleware uses shared client IP parsing based on Express trust-proxy configuration (TRUST_PROXY + TRUST_PROXY_CIDRS).
 - app/middleware/requireAdmin.js uses timing-safe API key comparison.

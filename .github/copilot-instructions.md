@@ -103,11 +103,11 @@ Orca:
 - DEBUG_COMMAND_LOGS=true enables verbose subprocess command logging.
 
 ## Preferred Skills
-Skills (thin command references pointing to agent definitions):
+Skills (operational playbooks mapped to agent definitions):
 - .github/skills/docker-ops/SKILL.md
 - .github/skills/testing/SKILL.md
 - .github/skills/docs-sync/SKILL.md
-- .github/skills/oop-solid-23/SKILL.md
+- .github/skills/best-practice/SKILL.md
 
 ## Agent Definitions
 Mirrored in `.github/agents/` and `.claude/agents/`:

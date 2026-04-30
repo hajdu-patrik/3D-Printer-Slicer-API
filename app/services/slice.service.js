@@ -6,8 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { OUTPUT_DIR } = require('../config/paths');
 const { getClientIp } = require('../utils/client-ip');
-const { getRate } = require('./pricing.service');
-const { enqueueSliceJob } = require('./slice/queue');
+const { enqueueSliceJob, toQueueErrorResponse } = require('./slice/queue');
 const { runCommand } = require('./slice/command');
 const { extractFirstSupportedFromZip } = require('./slice/zip');
 const { parseSliceOptions } = require('./slice/options');
@@ -16,12 +15,11 @@ const { getModelInfo, parseOutputDetailed } = require('./slice/model-stats');
 const { resolveSlicerExecutable, buildSlicerCommandArgs } = require('./slice/engine');
 const { applyTransformAndValidateModel } = require('./slice/transform');
 const { handleProcessingError } = require('./slice/errors');
+const { buildSliceSuccessResponse } = require('./slice/response');
 const {
     isSupportedInputExtension,
     getSupportedInputExtensionsText,
     buildOutputFilename,
-    roundDimensions,
-    roundToThree,
     createIsolatedOutputDir,
     resolveSingleOutputFile,
     alignOrcaOutputFileName,
@@ -42,28 +40,9 @@ const {
  * @returns {import('express').Response} Serialized queue error response.
  */
 function createQueueErrorResponse(err, res) {
-    if (err.message.startsWith('QUEUE_FULL|')) {
-        return res.status(503).json({
-            success: false,
-            error: err.message.split('|')[1],
-            errorCode: 'SLICE_QUEUE_FULL'
-        });
-    }
-
-    if (err.message.startsWith('QUEUE_TIMEOUT|')) {
-        return res.status(503).json({
-            success: false,
-            error: err.message.split('|')[1],
-            errorCode: 'SLICE_QUEUE_TIMEOUT'
-        });
-    }
-
-    if (err.message.startsWith('QUEUE_CLIENT_LIMIT|')) {
-        return res.status(429).json({
-            success: false,
-            error: err.message.split('|')[1],
-            errorCode: 'SLICE_QUEUE_CLIENT_LIMIT'
-        });
+    const queueErrorResponse = toQueueErrorResponse(err);
+    if (queueErrorResponse) {
+        return res.status(queueErrorResponse.status).json(queueErrorResponse.body);
     }
 
     return res.status(500).json({
@@ -136,103 +115,214 @@ async function prepareProcessableModel(inputFile, depth, technology, filesCleanu
 }
 
 /**
- * Calculate request pricing for parsed print stats.
- * @param {'FDM'|'SLA'} technology Active print technology.
- * @param {string} material Material key.
- * @param {{print_time_seconds: number}} stats Parsed print stats.
- * @returns {{hourlyRate: number, totalPrice: number}} Pricing result.
+ * @typedef {{
+ * layerHeight: number,
+ * material: string,
+ * depth: number,
+ * infillPercentage: string,
+ * technology: 'FDM'|'SLA',
+ * transformOptions: {unit: 'mm'|'inch', keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, targetSizeMm: {x: number | null, y: number | null, z: number | null}, scalePercent: number | null, rotationDeg: {x: number, y: number, z: number}},
+ * profileOverrides: {prusaProfile: string | null, orcaMachineProfile: string | null, orcaProcessProfile: string | null}
+ * }} SliceRequestOptions
  */
-function calculateSlicePricing(technology, material, stats) {
-    const hourlyRate = getRate(technology, material);
-    const printHours = stats.print_time_seconds / 3600;
-    const calcHours = Math.max(printHours, 0.25);
-    const totalPrice = Math.ceil((calcHours * hourlyRate) / 10) * 10;
+
+/**
+ * Parse request payload for slicing and emit HTTP response on validation failure.
+ * @param {import('express').Request} req Express request.
+ * @param {import('express').Response} res Express response.
+ * @param {string} inputFile Uploaded temp file path.
+ * @param {'FDM'|'SLA'|null} forcedTechnology Optional engine-enforced technology.
+ * @param {'prusa'|'orca'} engine Active slicer engine.
+ * @returns {{response: import('express').Response | null, options?: SliceRequestOptions}} Parsed options or response.
+ */
+function parseSliceRequestOrResponse(req, res, inputFile, forcedTechnology, engine) {
+    const parsedRequest = parseSliceOptions(req.body, forcedTechnology, engine);
+    if (!parsedRequest.isValid) {
+        cleanupFiles([inputFile]);
+        return {
+            response: res.status(400).json(parsedRequest.response)
+        };
+    }
 
     return {
-        hourlyRate,
-        totalPrice
+        response: null,
+        options: parsedRequest.options
     };
 }
 
 /**
- * Build successful slice response payload.
+ * Resolve deterministic output targets for current slicing request.
+ * @param {'prusa'|'orca'} engine Active slicer engine.
+ * @param {string} originalName Original uploaded filename.
+ * @param {'FDM'|'SLA'} technology Requested technology.
+ * @param {string[]} filesCleanupList Cleanup collector.
+ * @returns {{outputPath: string, orcaOutputDir: string | null, slicerOutputPath: string}} Output path mapping.
+ */
+function resolveSliceOutputTargets(engine, originalName, technology, filesCleanupList) {
+    const outputFilename = buildOutputFilename(originalName, technology);
+    const outputPath = path.join(OUTPUT_DIR, outputFilename);
+    const orcaOutputDir = engine === 'orca' ? createIsolatedOutputDir(OUTPUT_DIR) : null;
+    if (orcaOutputDir) {
+        filesCleanupList.push(orcaOutputDir);
+    }
+
+    const slicerOutputPath = engine === 'orca'
+        ? path.join(orcaOutputDir, outputFilename)
+        : outputPath;
+
+    return {
+        outputPath,
+        orcaOutputDir,
+        slicerOutputPath
+    };
+}
+
+/**
+ * Resolve profile files and emit HTTP response when profile selection is invalid.
+ * @param {import('express').Response} res Express response.
+ * @param {string[]} filesCleanupList Cleanup collector.
+ * @param {'prusa'|'orca'} engine Active slicer engine.
+ * @param {'FDM'|'SLA'} technology Requested technology.
+ * @param {number} layerHeight Requested layer height.
+ * @param {{orcaMachineProfile?: string, processProfile?: string, prusaProfile?: string}} profileOverrides Optional profile overrides.
+ * @returns {{response: import('express').Response | null, baseConfigFile?: string, orcaMachineConfigFile?: string | null}} Profile resolution result.
+ */
+function resolveProfilesOrResponse(res, filesCleanupList, engine, technology, layerHeight, profileOverrides) {
+    const profileSelection = resolveProfileSelection(engine, technology, layerHeight, profileOverrides);
+    if (!profileSelection.isValid) {
+        cleanupFiles(filesCleanupList);
+        return {
+            response: res.status(profileSelection.status).json(profileSelection.response)
+        };
+    }
+
+    return {
+        response: null,
+        baseConfigFile: profileSelection.baseConfigFile,
+        orcaMachineConfigFile: profileSelection.orcaMachineConfigFile
+    };
+}
+
+/**
+ * Apply transform pipeline and emit HTTP response when transformed model is out of bounds.
+ * @param {import('express').Response} res Express response.
+ * @param {string[]} filesCleanupList Cleanup collector.
+ * @param {string} processableFile Current processable model path.
+ * @param {{x: number, y: number, z: number, height_mm: number}} originalModelInfo Source model dimensions.
+ * @param {{unit: 'mm'|'inch', scalePercent: number | null, keepProportions: boolean, targetSizeMm: {x: number | null, y: number | null, z: number | null}, rotationDeg: {x: number, y: number, z: number}}} transformOptions Transform options.
+ * @param {{min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number}, sourceProfile: string}} buildVolumeLimits Build volume limits.
+ * @returns {Promise<{
+ * response: import('express').Response | null,
+ * processableFile?: string,
+ * transformPlan?: {keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, scale: {x: number, y: number, z: number}, rotationDeg: {x: number, y: number, z: number}},
+ * effectiveModelInfo?: {x: number, y: number, z: number, height_mm: number},
+ * modelBoundsValidation?: {dimensions: {x: number, y: number, z: number}}
+ * }>} Model preparation result.
+ */
+async function prepareModelForSlicingOrResponse(
+    res,
+    filesCleanupList,
+    processableFile,
+    originalModelInfo,
+    transformOptions,
+    buildVolumeLimits
+) {
+    const modelPreparation = await applyTransformAndValidateModel(
+        processableFile,
+        originalModelInfo,
+        transformOptions,
+        buildVolumeLimits,
+        filesCleanupList
+    );
+
+    if (!modelPreparation.isValid) {
+        cleanupFiles(filesCleanupList);
+        return {
+            response: res.status(modelPreparation.status).json(modelPreparation.response)
+        };
+    }
+
+    return {
+        response: null,
+        processableFile: modelPreparation.processableFile,
+        transformPlan: modelPreparation.transformPlan,
+        effectiveModelInfo: modelPreparation.effectiveModelInfo,
+        modelBoundsValidation: modelPreparation.modelBoundsValidation
+    };
+}
+
+/**
+ * Execute slicer command and parse output stats.
  * @param {{
  * engine: 'prusa'|'orca',
  * technology: 'FDM'|'SLA',
- * material: string,
+ * layerHeight: number,
  * infillPercentage: string,
- * orcaMachineConfigFile: string | null,
  * baseConfigFile: string,
- * transformOptions: {unit: 'mm'|'inch', scalePercent: number | null},
- * transformPlan: {keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, scale: {x: number, y: number, z: number}, rotationDeg: {x: number, y: number, z: number}},
- * originalModelInfo: {x: number, y: number, z: number},
- * modelBoundsValidation: {dimensions: {x: number, y: number, z: number}},
- * buildVolumeLimits: {min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number}, sourceProfile: string},
- * stats: {print_time_seconds: number, print_time_readable: string, material_used_m: number, object_height_mm: number, estimated_price_huf: number}
- * }} context Response context.
- * @returns {Record<string, unknown>} API response payload.
+ * orcaMachineConfigFile: string | null,
+ * slicerOutputPath: string,
+ * outputPath: string,
+ * orcaOutputDir: string | null,
+ * processableFile: string,
+ * filesCleanupList: string[],
+ * effectiveModelInfo: {height_mm: number}
+ * }} context Slicer execution context.
+ * @returns {Promise<{stats: {print_time_seconds: number, print_time_readable: string, material_used_m: number, object_height_mm: number, estimated_price_huf: number}}>} Parsed stats.
  */
-function buildSliceSuccessResponse(context) {
+async function runSlicerAndParseStats(context) {
     const {
         engine,
         technology,
-        material,
+        layerHeight,
         infillPercentage,
-        orcaMachineConfigFile,
         baseConfigFile,
-        transformOptions,
-        transformPlan,
-        originalModelInfo,
-        modelBoundsValidation,
-        buildVolumeLimits,
-        stats
+        orcaMachineConfigFile,
+        slicerOutputPath,
+        outputPath,
+        orcaOutputDir,
+        processableFile,
+        filesCleanupList,
+        effectiveModelInfo
     } = context;
 
-    const { hourlyRate, totalPrice } = calculateSlicePricing(technology, material, stats);
-
-    return {
-        success: true,
-        slicer_engine: engine,
+    const runtimeConfigFile = createRuntimeSlicerProfile(
+        engine,
+        baseConfigFile,
         technology,
-        material,
-        infill: infillPercentage,
-        profiles: engine === 'orca'
-            ? {
-                machine_profile: path.basename(orcaMachineConfigFile),
-                process_profile: path.basename(baseConfigFile)
-            }
-            : {
-                prusa_profile: path.basename(baseConfigFile)
-            },
-        model_transform: {
-            size_unit: transformOptions.unit,
-            keep_proportions: transformPlan.keepProportions,
-            requested_size: {
-                x: transformPlan.requestedTargetSize.x === null ? null : roundToThree(transformPlan.requestedTargetSize.x),
-                y: transformPlan.requestedTargetSize.y === null ? null : roundToThree(transformPlan.requestedTargetSize.y),
-                z: transformPlan.requestedTargetSize.z === null ? null : roundToThree(transformPlan.requestedTargetSize.z)
-            },
-            scale_percent: transformOptions.scalePercent,
-            scale_factors: roundDimensions(transformPlan.scale),
-            rotation_deg: roundDimensions(transformPlan.rotationDeg),
-            original_dimensions_mm: roundDimensions({
-                x: originalModelInfo.x,
-                y: originalModelInfo.y,
-                z: originalModelInfo.z
-            }),
-            final_dimensions_mm: roundDimensions(modelBoundsValidation.dimensions)
-        },
-        build_volume_limits_mm: {
-            min: roundDimensions(buildVolumeLimits.min),
-            max: roundDimensions(buildVolumeLimits.max),
-            source_profile: buildVolumeLimits.sourceProfile
-        },
-        hourly_rate: hourlyRate,
-        stats: {
-            ...stats,
-            estimated_price_huf: totalPrice
-        }
-    };
+        layerHeight,
+        infillPercentage,
+        filesCleanupList
+    );
+
+    logEngineProfileSelection(engine, orcaMachineConfigFile, baseConfigFile, infillPercentage, layerHeight);
+
+    const slicerArgs = buildSlicerCommandArgs(
+        technology,
+        runtimeConfigFile,
+        slicerOutputPath,
+        infillPercentage,
+        engine,
+        orcaMachineConfigFile
+    );
+
+    const slicerExecutable = resolveSlicerExecutable(engine);
+    await runCommand(slicerExecutable, [...slicerArgs, processableFile]);
+
+    const effectiveOutputPath = engine === 'orca'
+        ? alignOrcaOutputFileName(resolveSingleOutputFile(orcaOutputDir, '.gcode'), outputPath)
+        : outputPath;
+
+    finalizeEngineMetadata(engine, orcaOutputDir || OUTPUT_DIR);
+
+    const stats = await parseOutputDetailed(
+        effectiveOutputPath,
+        technology,
+        layerHeight,
+        effectiveModelInfo.height_mm,
+        engine
+    );
+
+    return { stats };
 }
 
 /**
@@ -263,10 +353,9 @@ async function processSlice(req, res, options = {}) {
         return createUnsupportedFormatResponse(res, inputFile);
     }
 
-    const parsedRequest = parseSliceOptions(req.body, forcedTechnology, engine);
-    if (!parsedRequest.isValid) {
-        cleanupFiles([inputFile]);
-        return res.status(400).json(parsedRequest.response);
+    const parsedRequest = parseSliceRequestOrResponse(req, res, inputFile, forcedTechnology, engine);
+    if (parsedRequest.response) {
+        return parsedRequest.response;
     }
 
     const {
@@ -291,74 +380,55 @@ async function processSlice(req, res, options = {}) {
             filesCleanupList
         );
 
-        const outputFilename = buildOutputFilename(originalName, technology);
-        const outputPath = path.join(OUTPUT_DIR, outputFilename);
-        const orcaOutputDir = engine === 'orca' ? createIsolatedOutputDir(OUTPUT_DIR) : null;
-        if (orcaOutputDir) {
-            filesCleanupList.push(orcaOutputDir);
-        }
-        const slicerOutputPath = engine === 'orca'
-            ? path.join(orcaOutputDir, outputFilename)
-            : outputPath;
+        const {
+            outputPath,
+            orcaOutputDir,
+            slicerOutputPath
+        } = resolveSliceOutputTargets(engine, originalName, technology, filesCleanupList);
 
-        const profileSelection = resolveProfileSelection(engine, technology, layerHeight, profileOverrides);
-        if (!profileSelection.isValid) {
-            cleanupFiles(filesCleanupList);
-            return res.status(profileSelection.status).json(profileSelection.response);
+        const profileResolution = resolveProfilesOrResponse(
+            res,
+            filesCleanupList,
+            engine,
+            technology,
+            layerHeight,
+            profileOverrides
+        );
+        if (profileResolution.response) {
+            return profileResolution.response;
         }
-        const { baseConfigFile, orcaMachineConfigFile } = profileSelection;
+        const { baseConfigFile, orcaMachineConfigFile } = profileResolution;
 
         const buildVolumeLimits = resolveBuildVolumeLimits(engine, technology, baseConfigFile, orcaMachineConfigFile);
-        const modelPreparation = await applyTransformAndValidateModel(
+        const modelPreparation = await prepareModelForSlicingOrResponse(
+            res,
+            filesCleanupList,
             processableFile,
             originalModelInfo,
             transformOptions,
-            buildVolumeLimits,
-            filesCleanupList
+            buildVolumeLimits
         );
-        if (!modelPreparation.isValid) {
-            cleanupFiles(filesCleanupList);
-            return res.status(modelPreparation.status).json(modelPreparation.response);
+        if (modelPreparation.response) {
+            return modelPreparation.response;
         }
 
         processableFile = modelPreparation.processableFile;
         const { transformPlan, effectiveModelInfo, modelBoundsValidation } = modelPreparation;
 
-        const runtimeConfigFile = createRuntimeSlicerProfile(
+        const { stats } = await runSlicerAndParseStats({
             engine,
+            technology,
+            layerHeight,
+            infillPercentage,
             baseConfigFile,
-            technology,
-            layerHeight,
-            infillPercentage,
-            filesCleanupList
-        );
-
-        logEngineProfileSelection(engine, orcaMachineConfigFile, baseConfigFile, infillPercentage, layerHeight);
-
-        const slicerArgs = buildSlicerCommandArgs(
-            technology,
-            runtimeConfigFile,
+            orcaMachineConfigFile,
             slicerOutputPath,
-            infillPercentage,
-            engine,
-            orcaMachineConfigFile
-        );
-        const slicerExecutable = resolveSlicerExecutable(engine);
-        await runCommand(slicerExecutable, [...slicerArgs, processableFile]);
-
-        const effectiveOutputPath = engine === 'orca'
-            ? alignOrcaOutputFileName(resolveSingleOutputFile(orcaOutputDir, '.gcode'), outputPath)
-            : outputPath;
-
-        finalizeEngineMetadata(engine, orcaOutputDir || OUTPUT_DIR);
-
-        const stats = await parseOutputDetailed(
-            effectiveOutputPath,
-            technology,
-            layerHeight,
-            effectiveModelInfo.height_mm,
-            engine
-        );
+            outputPath,
+            orcaOutputDir,
+            processableFile,
+            filesCleanupList,
+            effectiveModelInfo
+        });
 
         const responsePayload = buildSliceSuccessResponse({
             engine,

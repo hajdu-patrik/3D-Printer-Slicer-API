@@ -126,11 +126,11 @@ Queue and rate behavior:
 - SLICER_BASE_URL
 
 ## Skill Packs
-Claude skills (thin command references pointing to agent definitions):
+Claude skills (operational playbooks mapped to agent definitions):
 - .claude/skills/docker-ops/SKILL.md
 - .claude/skills/testing/SKILL.md
 - .claude/skills/docs-sync/SKILL.md
-- .claude/skills/oop-solid-23/SKILL.md
+- .claude/skills/best-practice/SKILL.md
 
 ## Agent Definitions
 Mirrored in `.claude/agents/` and `.github/agents/`:

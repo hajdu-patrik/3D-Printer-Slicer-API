@@ -63,8 +63,14 @@ This document describes the application runtime inside app/.
 
 ### Services: top-level
 - app/services/pricing.service.js
-  - Loads pricing from disk with defaults fallback and legacy migration behavior.
-  - Persists pricing updates and provides normalized material lookup helpers.
+  - Facade service that coordinates pricing load/save lifecycle and exposes stable pricing APIs to routes and slicer modules.
+  - Delegates persistence to repository and material/domain logic to catalog modules.
+- app/services/pricing/repository.js
+  - File-system repository for pricing payload read/write and candidate-file discovery.
+  - Handles primary/legacy pricing source resolution.
+- app/services/pricing/catalog.js
+  - In-memory pricing domain catalog for normalization, material lookup, and rate calculation logic.
+  - Encapsulates technology/material rules and mutation operations.
 - app/services/slice.service.js
   - Central orchestrator for slice requests.
   - Validates upload, parses options, enqueues job by client IP, preprocesses model, runs slicer command, parses stats, computes pricing, and returns response.
@@ -97,9 +103,13 @@ This document describes the application runtime inside app/.
   - Resolves Prusa and Orca profile selection.
   - Validates profile existence.
   - Creates runtime profile variants and resolves build-volume limits from profile metadata.
+- app/services/slice/response.js
+  - Composes successful slice response payloads.
+  - Encapsulates pricing and profile payload mapper strategies for engine/technology-specific response shaping.
 - app/services/slice/queue.js
   - Implements bounded FIFO queue with MAX_CONCURRENT_SLICES, MAX_SLICE_QUEUE_LENGTH, MAX_SLICE_QUEUE_PER_IP, and MAX_SLICE_QUEUE_WAIT_MS.
   - Applies per-client fairness and timeout rejection semantics.
+  - Emits typed queue-domain errors and centralized queue-to-API error mapping metadata.
 - app/services/slice/transform.js
   - Builds transform plan (scale/rotation), applies model transform via Python script, and validates final bounds against build-volume limits.
 - app/services/slice/value-parsers.js

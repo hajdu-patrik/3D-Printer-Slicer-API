@@ -1,80 +1,33 @@
 /**
- * Pricing service for loading, persisting, and querying material hourly rates.
+ * Pricing service facade for loading, persisting, and querying material hourly rates.
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
 const { PRICING_FILE, LEGACY_PRICING_FILE } = require('../config/paths');
 const { DEFAULT_PRICING } = require('../config/constants');
+const { PricingRepository } = require('./pricing/repository');
+const { PricingCatalog } = require('./pricing/catalog');
 
-let pricing = structuredClone(DEFAULT_PRICING);
+const pricingRepository = new PricingRepository({
+    primaryFile: PRICING_FILE,
+    legacyFile: LEGACY_PRICING_FILE,
+    defaultPricing: DEFAULT_PRICING
+});
+
+const pricingCatalog = new PricingCatalog(DEFAULT_PRICING);
 let activePricingFile = PRICING_FILE;
-
-/**
- * Read and normalize pricing payload from disk.
- * @param {string} filePath Absolute path to pricing file.
- * @returns {{FDM: Record<string, number>, SLA: Record<string, number>}} Parsed and merged pricing map.
- */
-function readPricingFile(filePath) {
-    const pricingRaw = fs.readFileSync(filePath, 'utf8');
-    const parsed = JSON.parse(pricingRaw);
-    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid pricing payload');
-
-    const fdmSource = parsed.FDM && typeof parsed.FDM === 'object' ? parsed.FDM : undefined;
-    const slaSource = parsed.SLA && typeof parsed.SLA === 'object' ? parsed.SLA : undefined;
-
-    return {
-        FDM: { ...DEFAULT_PRICING.FDM, ...fdmSource },
-        SLA: { ...DEFAULT_PRICING.SLA, ...slaSource }
-    };
-}
-
-/**
- * Write current in-memory pricing to a target file.
- * @param {string} filePath Absolute path to target pricing file.
- * @returns {void}
- */
-function writePricingFile(filePath) {
-    const parentDir = path.dirname(filePath);
-    if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(pricing, null, 2));
-}
-
-/**
- * Resolve candidate pricing files ordered by most recently modified.
- * @returns {string[]} Existing pricing file paths sorted descending by mtime.
- */
-function getExistingCandidates() {
-    const primaryExists = fs.existsSync(PRICING_FILE);
-    const candidates = primaryExists
-        ? [PRICING_FILE]
-        : [PRICING_FILE, LEGACY_PRICING_FILE].filter((filePath) => fs.existsSync(filePath));
-
-    return candidates.sort((a, b) => {
-        const aTime = fs.statSync(a).mtimeMs;
-        const bTime = fs.statSync(b).mtimeMs;
-        return bTime - aTime;
-    });
-}
 
 /**
  * Persist current in-memory pricing to disk.
  * @returns {boolean} True when save succeeds, otherwise false.
  */
 function savePricingToDisk() {
-    const writeTargets = [PRICING_FILE];
-
-    for (const targetFile of writeTargets) {
-        try {
-            writePricingFile(targetFile);
-            activePricingFile = targetFile;
-            return true;
-        } catch (err) {
-            console.error(`[PRICING UPDATE] Failed to save pricing file (${targetFile}): ${err.message}`);
-        }
+    try {
+        activePricingFile = pricingRepository.saveToPrimary(pricingCatalog.getPricing());
+        return true;
+    } catch (err) {
+        console.error(`[PRICING UPDATE] Failed to save pricing file (${pricingRepository.primaryFile}): ${err.message}`);
+        return false;
     }
-
-    return false;
 }
 
 /**
@@ -83,10 +36,10 @@ function savePricingToDisk() {
  * @returns {void}
  */
 function loadPricingFromDisk() {
-    const existingCandidates = getExistingCandidates();
+    const existingCandidates = pricingRepository.getExistingCandidates();
 
     if (existingCandidates.length === 0) {
-        pricing = structuredClone(DEFAULT_PRICING);
+        pricingCatalog.resetToDefault();
         if (savePricingToDisk()) {
             console.log(`[PRICING UPDATE] Pricing file was missing. Default pricing created at ${activePricingFile}.`);
         } else {
@@ -97,7 +50,8 @@ function loadPricingFromDisk() {
 
     for (const candidateFile of existingCandidates) {
         try {
-            pricing = readPricingFile(candidateFile);
+            const diskPricing = pricingRepository.readPricingFile(candidateFile);
+            pricingCatalog.setPricing(diskPricing);
             activePricingFile = PRICING_FILE;
             if (candidateFile !== PRICING_FILE) {
                 savePricingToDisk();
@@ -109,7 +63,7 @@ function loadPricingFromDisk() {
     }
 
     console.warn('[PRICING UPDATE] All pricing files were unreadable, using defaults.');
-    pricing = structuredClone(DEFAULT_PRICING);
+    pricingCatalog.resetToDefault();
     savePricingToDisk();
 }
 
@@ -118,7 +72,7 @@ function loadPricingFromDisk() {
  * @returns {{FDM: Record<string, number>, SLA: Record<string, number>}}
  */
 function getPricing() {
-    return structuredClone(pricing);
+    return pricingCatalog.getPricing();
 }
 
 /**
@@ -127,8 +81,7 @@ function getPricing() {
  * @returns {'FDM' | 'SLA' | null} Normalized technology or null when invalid.
  */
 function normalizeTechnology(value) {
-    const normalized = String(value || '').toUpperCase();
-    return normalized === 'FDM' || normalized === 'SLA' ? normalized : null;
+    return pricingCatalog.normalizeTechnology(value);
 }
 
 /**
@@ -137,7 +90,7 @@ function normalizeTechnology(value) {
  * @returns {string} Canonical normalized token.
  */
 function normalizeMaterialToken(value) {
-    return String(value || '').trim().toUpperCase();
+    return pricingCatalog.normalizeMaterialToken(value);
 }
 
 /**
@@ -147,8 +100,7 @@ function normalizeMaterialToken(value) {
  * @returns {string | null} Existing material key or null when not found.
  */
 function findMaterialKey(technology, materialParam) {
-    const requested = normalizeMaterialToken(materialParam);
-    return Object.keys(pricing[technology] || {}).find((key) => normalizeMaterialToken(key) === requested) || null;
+    return pricingCatalog.findMaterialKey(technology, materialParam);
 }
 
 /**
@@ -157,13 +109,7 @@ function findMaterialKey(technology, materialParam) {
  * @returns {'FDM' | 'SLA' | 'BOTH' | null} Resolved technology scope.
  */
 function resolveMaterialTechnology(materialParam) {
-    const inFdm = Boolean(findMaterialKey('FDM', materialParam));
-    const inSla = Boolean(findMaterialKey('SLA', materialParam));
-
-    if (inFdm && inSla) return 'BOTH';
-    if (inFdm) return 'FDM';
-    if (inSla) return 'SLA';
-    return null;
+    return pricingCatalog.resolveMaterialTechnology(materialParam);
 }
 
 /**
@@ -173,7 +119,7 @@ function resolveMaterialTechnology(materialParam) {
  * @returns {boolean} True when material is configured for the selected technology.
  */
 function isMaterialValidForTechnology(technology, materialParam) {
-    return Boolean(findMaterialKey(technology, materialParam));
+    return pricingCatalog.isMaterialValidForTechnology(technology, materialParam);
 }
 
 /**
@@ -182,7 +128,7 @@ function isMaterialValidForTechnology(technology, materialParam) {
  * @returns {string[]} Material key list.
  */
 function getAllowedMaterialsForTechnology(technology) {
-    return Object.keys(pricing[technology] || {});
+    return pricingCatalog.getAllowedMaterialsForTechnology(technology);
 }
 
 /**
@@ -193,10 +139,7 @@ function getAllowedMaterialsForTechnology(technology) {
  * @returns {string} Final material key that was updated.
  */
 function updateMaterialPrice(technology, materialParam, price) {
-    const existingMaterialKey = findMaterialKey(technology, materialParam);
-    const materialKey = existingMaterialKey || normalizeMaterialToken(materialParam);
-    pricing[technology][materialKey] = price;
-    return materialKey;
+    return pricingCatalog.updateMaterialPrice(technology, materialParam, price);
 }
 
 /**
@@ -206,7 +149,7 @@ function updateMaterialPrice(technology, materialParam, price) {
  * @returns {void}
  */
 function removeMaterial(technology, materialKey) {
-    delete pricing[technology][materialKey];
+    pricingCatalog.removeMaterial(technology, materialKey);
 }
 
 /**
@@ -217,17 +160,7 @@ function removeMaterial(technology, materialKey) {
  * @returns {number} Hourly rate in HUF.
  */
 function getRate(technology, material) {
-    const techPricing = pricing[technology] || {};
-    const materialKey = findMaterialKey(technology, material);
-    if (materialKey && Object.hasOwn(techPricing, materialKey)) {
-        return techPricing[materialKey];
-    }
-
-    const firstRate = Object.values(techPricing).find((value) => Number.isFinite(value) && value > 0);
-    if (firstRate) return firstRate;
-
-    const fallbackPricing = DEFAULT_PRICING[technology] || {};
-    return Object.values(fallbackPricing).find((value) => Number.isFinite(value) && value > 0) || 0;
+    return pricingCatalog.getRate(technology, material);
 }
 
 module.exports = {

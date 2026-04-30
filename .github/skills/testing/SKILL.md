@@ -5,6 +5,9 @@ description: Execute Python-based validation and regression test suites for the 
 
 Use this skill whenever API endpoints, slicing logic, pricing, or queue concurrency needs to be tested.
 
+Slash entrypoint:
+- Use `/testing` to run the repository test workflow and summarize markdown report evidence.
+
 Full agent definition with scope, responsibilities, hard rules, and scope boundaries is in `.github/agents/test-engineer.md`.
 Read that file for complete context when writing new tests or extending existing ones.
 
@@ -26,7 +29,8 @@ Read that file for complete context when writing new tests or extending existing
 4. Queue and concurrency test
    - Command: `python tests/testing-scripts/queue_concurrency_test_runner.py --count <N> --retry-on-429 3`
 
-## Workflow
+## Execution Workflow
+
 1. Identify which subsystem must be validated.
 2. Run the exact matching test script.
 3. Wait for completion.
@@ -34,5 +38,12 @@ Read that file for complete context when writing new tests or extending existing
 5. Summarize pass/fail details and notable findings.
 
 ## Troubleshooting
+
 - If admin tests fail with 401/403, verify `ADMIN_API_KEY` in .env matches the running server.
 - If slice tests fail with connection errors, verify API health endpoint before rerun.
+
+## Validation Checklist
+
+- [ ] Chosen runner matches requested behavior scope.
+- [ ] Corresponding markdown report was read after execution.
+- [ ] Summary includes failures, retries, and key diagnostics.

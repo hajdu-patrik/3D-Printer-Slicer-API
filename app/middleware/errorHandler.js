@@ -17,6 +17,64 @@ function buildErrorResponse(message, errorCode) {
     };
 }
 
+const KNOWN_ERROR_RULES = Object.freeze([
+    {
+        match: (err) => err?.code === 'ADMIN_CORS_ORIGIN_NOT_ALLOWED',
+        status: 403,
+        message: 'Origin is not allowed for admin endpoints.',
+        errorCode: 'ADMIN_CORS_ORIGIN_NOT_ALLOWED'
+    },
+    {
+        match: (err) => err?.type === 'entity.parse.failed',
+        status: 400,
+        message: 'Invalid JSON request payload.',
+        errorCode: 'INVALID_JSON_BODY'
+    },
+    {
+        match: (err) => err?.type === 'entity.too.large',
+        status: 413,
+        message: 'Request payload is too large.',
+        errorCode: 'PAYLOAD_TOO_LARGE'
+    },
+    {
+        match: (err) => err?.code === 'LIMIT_FILE_SIZE',
+        status: 413,
+        message: 'Uploaded file is too large.',
+        errorCode: 'UPLOADED_FILE_TOO_LARGE'
+    },
+    {
+        match: (err) => err?.code === 'LIMIT_UNEXPECTED_FILE',
+        status: 400,
+        message: 'Unexpected file field. Use "choosenFile" for uploads.',
+        errorCode: 'UNEXPECTED_FILE_FIELD'
+    },
+    {
+        match: (err) => err?.name === 'MulterError',
+        status: 400,
+        message: 'Invalid file upload.',
+        errorCode: 'UPLOAD_ERROR'
+    }
+]);
+
+/**
+ * Match known middleware/runtime errors to stable response metadata.
+ * @param {Error & {status?: number, code?: string, type?: string}} err Error instance.
+ * @returns {{status: number, message: string, errorCode: string} | null} Mapped error metadata.
+ */
+function resolveKnownErrorRule(err) {
+    for (const rule of KNOWN_ERROR_RULES) {
+        if (rule.match(err)) {
+            return {
+                status: rule.status,
+                message: rule.message,
+                errorCode: rule.errorCode
+            };
+        }
+    }
+
+    return null;
+}
+
 /**
  * Express error middleware.
  * @param {Error & {status?: number, code?: string, type?: string}} err Error instance.
@@ -30,28 +88,9 @@ function errorHandler(err, req, res, next) {
         return next(err);
     }
 
-    if (err?.code === 'ADMIN_CORS_ORIGIN_NOT_ALLOWED') {
-        return res.status(403).json(buildErrorResponse('Origin is not allowed for admin endpoints.', 'ADMIN_CORS_ORIGIN_NOT_ALLOWED'));
-    }
-
-    if (err?.type === 'entity.parse.failed') {
-        return res.status(400).json(buildErrorResponse('Invalid JSON request payload.', 'INVALID_JSON_BODY'));
-    }
-
-    if (err?.type === 'entity.too.large') {
-        return res.status(413).json(buildErrorResponse('Request payload is too large.', 'PAYLOAD_TOO_LARGE'));
-    }
-
-    if (err?.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json(buildErrorResponse('Uploaded file is too large.', 'UPLOADED_FILE_TOO_LARGE'));
-    }
-
-    if (err?.code === 'LIMIT_UNEXPECTED_FILE') {
-        return res.status(400).json(buildErrorResponse('Unexpected file field. Use "choosenFile" for uploads.', 'UNEXPECTED_FILE_FIELD'));
-    }
-
-    if (err?.name === 'MulterError') {
-        return res.status(400).json(buildErrorResponse('Invalid file upload.', 'UPLOAD_ERROR'));
+    const knownError = resolveKnownErrorRule(err);
+    if (knownError) {
+        return res.status(knownError.status).json(buildErrorResponse(knownError.message, knownError.errorCode));
     }
 
     const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 600 ? err.status : 500;

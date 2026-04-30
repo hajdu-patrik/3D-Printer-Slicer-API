@@ -164,13 +164,13 @@ Prefer mirrored skills:
 - .github/skills/docker-ops/SKILL.md
 - .github/skills/testing/SKILL.md
 - .github/skills/docs-sync/SKILL.md
-- .github/skills/oop-solid-23/SKILL.md
+- .github/skills/best-practice/SKILL.md
 - .claude/skills/docker-ops/SKILL.md
 - .claude/skills/testing/SKILL.md
 - .claude/skills/docs-sync/SKILL.md
-- .claude/skills/oop-solid-23/SKILL.md
+- .claude/skills/best-practice/SKILL.md
 
-Skills are thin command references that point to their corresponding agent definitions for full context.
+Skills are operational playbooks that point to corresponding agent definitions for full context.
 
 ## Agent Definitions
 Mirrored in `.claude/agents/` and `.github/agents/`:

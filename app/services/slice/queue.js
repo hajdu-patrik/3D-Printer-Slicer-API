@@ -28,6 +28,110 @@ const queuedByKey = new Map();
 const activeByKey = new Map();
 
 /**
+ * Base queue-domain error carrying stable API mapping metadata.
+ */
+class SliceQueueError extends Error {
+    /**
+     * @param {string} message User-facing error message.
+     * @param {number} status HTTP status code.
+     * @param {string} errorCode Stable API error code.
+     */
+    constructor(message, status, errorCode) {
+        super(message);
+        this.name = this.constructor.name;
+        this.status = status;
+        this.errorCode = errorCode;
+    }
+}
+
+/**
+ * Queue overflow error.
+ */
+class SliceQueueFullError extends SliceQueueError {
+    constructor() {
+        super('Slice queue is full. Please retry later.', 503, 'SLICE_QUEUE_FULL');
+    }
+}
+
+/**
+ * Queue wait-time timeout error.
+ */
+class SliceQueueTimeoutError extends SliceQueueError {
+    constructor() {
+        super('Slice job timed out while waiting in queue.', 503, 'SLICE_QUEUE_TIMEOUT');
+    }
+}
+
+/**
+ * Per-client fairness cap error.
+ */
+class SliceQueueClientLimitError extends SliceQueueError {
+    constructor() {
+        super('Too many queued slice jobs for this client. Please wait and retry.', 429, 'SLICE_QUEUE_CLIENT_LIMIT');
+    }
+}
+
+const LEGACY_QUEUE_ERROR_PREFIXES = Object.freeze({
+    'QUEUE_FULL|': { status: 503, errorCode: 'SLICE_QUEUE_FULL' },
+    'QUEUE_TIMEOUT|': { status: 503, errorCode: 'SLICE_QUEUE_TIMEOUT' },
+    'QUEUE_CLIENT_LIMIT|': { status: 429, errorCode: 'SLICE_QUEUE_CLIENT_LIMIT' }
+});
+
+/**
+ * Convert legacy prefixed queue error messages into response metadata.
+ * @param {Error} err Queue error.
+ * @returns {{status: number, errorCode: string, error: string} | null} Normalized mapping when recognized.
+ */
+function parseLegacyQueueError(err) {
+    const message = typeof err?.message === 'string' ? err.message : '';
+
+    for (const [prefix, metadata] of Object.entries(LEGACY_QUEUE_ERROR_PREFIXES)) {
+        if (message.startsWith(prefix)) {
+            const errorText = message.slice(prefix.length).trim() || 'Queue processing failed.';
+            return {
+                status: metadata.status,
+                errorCode: metadata.errorCode,
+                error: errorText
+            };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Normalize queue-domain errors into stable API response payload metadata.
+ * @param {Error} err Queue error.
+ * @returns {{status: number, body: {success: boolean, error: string, errorCode: string}} | null} Queue response mapping.
+ */
+function toQueueErrorResponse(err) {
+    if (err instanceof SliceQueueError) {
+        return {
+            status: err.status,
+            body: {
+                success: false,
+                error: err.message,
+                errorCode: err.errorCode
+            }
+        };
+    }
+
+    const legacy = parseLegacyQueueError(err);
+    if (legacy) {
+        return {
+            status: legacy.status,
+            body: {
+                success: false,
+                error: legacy.error,
+                errorCode: legacy.errorCode
+            }
+        };
+    }
+
+    return null;
+}
+
+/**
  * Increment tracked count for key.
  * @param {Map<string, number>} map Counter map.
  * @param {string} key Counter key.
@@ -72,7 +176,7 @@ function runNextSliceJob() {
         const waitedMs = Date.now() - nextJob.enqueuedAt;
 
         if (waitedMs > MAX_SLICE_QUEUE_WAIT_MS) {
-            nextJob.reject(new Error('QUEUE_TIMEOUT|Slice job timed out while waiting in queue.'));
+            nextJob.reject(new SliceQueueTimeoutError());
             continue;
         }
 
@@ -103,12 +207,12 @@ function enqueueSliceJob(task, options = {}) {
 
     return new Promise((resolve, reject) => {
         if (sliceQueue.length >= MAX_SLICE_QUEUE_LENGTH) {
-            reject(new Error('QUEUE_FULL|Slice queue is full. Please retry later.'));
+            reject(new SliceQueueFullError());
             return;
         }
 
         if (getTotalJobsForKey(queueKey) >= MAX_SLICE_QUEUE_PER_IP) {
-            reject(new Error('QUEUE_CLIENT_LIMIT|Too many queued slice jobs for this client. Please wait and retry.'));
+            reject(new SliceQueueClientLimitError());
             return;
         }
 
@@ -134,5 +238,10 @@ function getQueueStatus() {
 
 module.exports = {
     enqueueSliceJob,
-    getQueueStatus
+    getQueueStatus,
+    toQueueErrorResponse,
+    SliceQueueError,
+    SliceQueueFullError,
+    SliceQueueTimeoutError,
+    SliceQueueClientLimitError
 };

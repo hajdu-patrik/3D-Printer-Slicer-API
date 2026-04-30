@@ -11,9 +11,9 @@ All notable changes to this project are documented in this file.
 - Added `quality-architect` agent in both agent registries:
   - `.github/agents/quality-architect.md`
   - `.claude/agents/quality-architect.md`
-- Added mirrored OOP/SOLID quality workflow skill:
-  - `.github/skills/oop-solid-23/SKILL.md`
-  - `.claude/skills/oop-solid-23/SKILL.md`
+- Added mirrored best-practice quality workflow skill:
+  - `.github/skills/best-practice/SKILL.md`
+  - `.claude/skills/best-practice/SKILL.md`
 
 ### Changed
 
@@ -21,6 +21,14 @@ All notable changes to this project are documented in this file.
   - `FixedWindowRateLimiter` for admin controls
   - `TokenBucketRateLimiter` for slice controls
   - shared middleware wrapper with stable 429 payload contract
+- Renamed the mirrored quality skill to `best-practice` and rewrote mirrored skill files as operational playbooks (workflow, guardrails, validation checklists).
+- Refactored `app/services/slice/queue.js` to use typed queue-domain errors with centralized queue-to-HTTP mapping metadata (replacing prefix-string control flow).
+- Extracted slice success payload composition from `app/services/slice.service.js` into `app/services/slice/response.js` with strategy-style profile and pricing mappers.
+- Decomposed `processSlice` in `app/services/slice.service.js` into smaller stage helpers for request parsing, output target resolution, profile resolution, model preparation, and slicer execution.
+- Refactored `app/middleware/errorHandler.js` from condition-heavy branching to declarative known-error strategy rules with stable response mapping.
+- Refactored `app/routes/pricing.routes.js` by extracting shared technology/material/price validators and persistence helpers to reduce duplicated route control flow.
+- Refactored `app/services/pricing.service.js` into a facade delegating persistence to `app/services/pricing/repository.js` and domain/material logic to `app/services/pricing/catalog.js`.
+- Preserved public pricing service API contracts for route and slicer modules while introducing explicit repository/catalog boundaries.
 - Updated orchestration docs to include the new quality-focused phase between tests and final documentation sync.
 - Updated version metadata to `3.1.2` in project manifests and OpenAPI definition.
 

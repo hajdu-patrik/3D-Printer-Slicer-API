@@ -2,6 +2,41 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.1.2 (2026-04-30)
+
+### Added
+
+- Added adaptive slice rate limiting with token-bucket behavior to better support short legitimate request bursts while preserving VPS protection limits.
+- Added configurable `SLICE_RATE_LIMIT_BURST_CAPACITY` (default `5`) to tune burst handling independently from per-window request limits.
+- Added `quality-architect` agent in both agent registries:
+  - `.github/agents/quality-architect.md`
+  - `.claude/agents/quality-architect.md`
+- Added mirrored OOP/SOLID quality workflow skill:
+  - `.github/skills/oop-solid-23/SKILL.md`
+  - `.claude/skills/oop-solid-23/SKILL.md`
+
+### Changed
+
+- Refactored `app/middleware/rateLimit.js` to a class-based OOP design with separated limiter strategies:
+  - `FixedWindowRateLimiter` for admin controls
+  - `TokenBucketRateLimiter` for slice controls
+  - shared middleware wrapper with stable 429 payload contract
+- Updated orchestration docs to include the new quality-focused phase between tests and final documentation sync.
+- Updated version metadata to `3.1.2` in project manifests and OpenAPI definition.
+
+### Fixed
+
+- `app/server.js`: hardened trust-proxy fallback behavior to avoid risky forwarded-header trust when CIDRs are not configured.
+- `app/services/slice.service.js`: ensured temp upload cleanup on invalid option parsing failures.
+- `app/services/slice/options.js`: corrected technology-aware default material selection for SLA/FDM paths.
+
+### Documentation
+
+- Synced core instruction files and mirrored guidance (`CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`) with:
+  - new quality agent/skill references
+  - updated environment key list including burst capacity
+  - refreshed synchronization metadata
+
 ## v3.1.1 (2026-04-21)
 
 ### Security Hardening

@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-04-21
+Last synchronized: 2026-04-30
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -123,6 +123,7 @@ Core keys from .env:
 - MAX_UPLOAD_BYTES
 - SLICE_RATE_LIMIT_WINDOW_MS
 - SLICE_RATE_LIMIT_MAX_REQUESTS
+- SLICE_RATE_LIMIT_BURST_CAPACITY
 - ADMIN_RATE_LIMIT_WINDOW_MS
 - ADMIN_RATE_LIMIT_MAX_REQUESTS
 - MAX_CONCURRENT_SLICES
@@ -163,9 +164,11 @@ Prefer mirrored skills:
 - .github/skills/docker-ops/SKILL.md
 - .github/skills/testing/SKILL.md
 - .github/skills/docs-sync/SKILL.md
+- .github/skills/oop-solid-23/SKILL.md
 - .claude/skills/docker-ops/SKILL.md
 - .claude/skills/testing/SKILL.md
 - .claude/skills/docs-sync/SKILL.md
+- .claude/skills/oop-solid-23/SKILL.md
 
 Skills are thin command references that point to their corresponding agent definitions for full context.
 
@@ -177,6 +180,7 @@ Mirrored in `.claude/agents/` and `.github/agents/`:
 - test-engineer — Python integration test runners and reports
 - docs-syncer — documentation and instruction file synchronization
 - docker-specialist — Dockerfile, docker-compose, container lifecycle
+- quality-architect — iterative OOP/SOLID/design-principles refactor workflow with 23-point checklist
 
 For multi-domain tasks (new features, endpoint changes, cross-cutting fixes), use the orchestrator agent workflow to plan and delegate.
 

@@ -358,7 +358,6 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
         };
     }
 
-    const material = input.material || DEFAULTS.DEFAULT_FDM_MATERIAL;
     const depthInput = input.depth;
     let depth = DEFAULTS.DEFAULT_RELIEF_DEPTH_MM;
     const hasDepthInput = depthInput !== undefined
@@ -402,6 +401,12 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
     }
 
     const technology = forcedTechnology || (layerHeight <= 0.05 ? 'SLA' : 'FDM');
+    const material = input.material || (
+        technology === 'SLA'
+            ? DEFAULTS.DEFAULT_SLA_MATERIAL
+            : DEFAULTS.DEFAULT_FDM_MATERIAL
+    );
+
     const layerHeightValidationError = validateLayerHeightSelection(layerHeight, forcedTechnology, engine);
     if (layerHeightValidationError) {
         return {

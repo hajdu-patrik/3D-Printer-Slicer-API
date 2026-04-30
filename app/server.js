@@ -74,8 +74,8 @@ function resolveTrustProxySetting() {
         return trustedCidrs;
     }
 
-    console.warn('[SECURITY] TRUST_PROXY=true but TRUST_PROXY_CIDRS is empty; falling back to loopback-only proxy trust.');
-    return ['loopback'];
+    console.warn('[SECURITY] TRUST_PROXY=true but TRUST_PROXY_CIDRS is empty; disabling proxy trust.');
+    return false;
 }
 
 const trustProxySetting = resolveTrustProxySetting();

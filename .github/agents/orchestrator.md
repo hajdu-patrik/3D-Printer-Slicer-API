@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Orchestrator agent for the 3D Printer Slicer API. Plans multi-domain tasks and delegates to specialized sub-agents (JS, Python, test, docs, Docker) running in parallel.
+description: Orchestrator agent for the 3D Printer Slicer API. Plans multi-domain tasks and delegates to specialized sub-agents (JS, Python, test, docs, Docker, quality) running in parallel.
 ---
 
 # Orchestrator Agent
@@ -35,11 +35,11 @@ Before spawning any agents, YOU must:
 
 ### Phase 2: Delegate
 After user approves the plan, spawn the relevant agents in parallel where possible.
-Only spawn agents that are actually needed — not every task needs all five.
+Only spawn agents that are actually needed — not every task needs all six.
 
 #### Agent Roster
 
-Agent definitions with full scope, constraints, and rules are in `.github/agents/` (mirrored in `.github/agents/`).
+Agent definitions with full scope, constraints, and rules are in `.github/agents/` (mirrored in `.claude/agents/`).
 Read the relevant agent file before briefing each sub-agent.
 
 **1. JavaScript Developer** — `.claude/agents/js-developer.md`
@@ -63,6 +63,11 @@ Read the relevant agent file before briefing each sub-agent.
 - Scope: Dockerfile, docker-compose.yml, docker-compose.dev.yml
 - Can run in parallel with code agents if changes are independent
 
+**6. Quality Architect** — `.claude/agents/quality-architect.md`
+- Scope: iterative OOP/SOLID/design-principles refactors using a 23-point checklist
+- Owns: design-quality baseline, safe incremental refactor plan, and checklist delta reporting
+- Runs AFTER feature code is stable and BEFORE final docs sync
+
 ### Phase 3: Integrate & Verify
 After all agents complete:
 1. Review each agent's output for conflicts or integration issues.
@@ -74,6 +79,7 @@ After all agents complete:
 - JS Developer and Python Developer can run in parallel.
 - Docker Specialist can run in parallel with code agents if changes are independent.
 - Test Engineer runs AFTER code agents finish (needs the new code to test).
+- Quality Architect runs after core code changes are integrated and tests are green.
 - Documentation Syncer runs LAST (needs to document the final state of everything).
 
 ## Briefing Template for Sub-agents

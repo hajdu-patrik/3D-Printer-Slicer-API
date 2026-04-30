@@ -264,7 +264,10 @@ async function processSlice(req, res, options = {}) {
     }
 
     const parsedRequest = parseSliceOptions(req.body, forcedTechnology, engine);
-    if (!parsedRequest.isValid) return res.status(400).json(parsedRequest.response);
+    if (!parsedRequest.isValid) {
+        cleanupFiles([inputFile]);
+        return res.status(400).json(parsedRequest.response);
+    }
 
     const {
         layerHeight,

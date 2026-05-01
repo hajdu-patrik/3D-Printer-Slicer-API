@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-04-30
+Last synchronized: 2026-05-01
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -60,6 +60,7 @@ Admin endpoints (x-api-key required):
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 - /admin/download/:fileName enforces extension checks, path containment checks, non-symlink target checks, and realpath containment checks.
+- /admin/download/ALL returns a ZIP stream of all valid output files while preserving the same containment/symlink safety checks.
 
 ## Engine Constraints
 Prusa:
@@ -146,6 +147,15 @@ For multi-domain tasks, use the orchestrator agent workflow to plan and delegate
 
 ## Testing Rule
 After running any Python test runner in tests/testing-scripts/, always read matching markdown report in tests/testing-scripts/results/.
+
+Focused test runners:
+- tests/testing-scripts/admin/admin_output_files_test_runner.py
+- tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
+
+Test organization:
+- Keep focused runners small and behavior-oriented.
+- Split oversized runners by domain and avoid mixing unrelated assertions.
+- Leave stable deterministic runners unchanged unless endpoint behavior changes.
 
 ## Documentation Topology
 Global:

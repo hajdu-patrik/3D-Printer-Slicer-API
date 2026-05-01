@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-04-30
+Last synchronized: 2026-05-01
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
@@ -67,6 +67,7 @@ Admin-protected endpoints (x-api-key required):
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 - /admin/download/:fileName must pass filename extension validation (.gcode/.sl1), path containment checks, lstat non-symlink checks, and realpath containment checks.
+- /admin/download/ALL returns a ZIP stream of all valid output files and must preserve the same containment/symlink safety guarantees.
 - Fail-fast geometry policy: invalid geometry returns INVALID_SOURCE_GEOMETRY.
 - No automatic model healing/correction is allowed.
 
@@ -150,14 +151,21 @@ Use Python test runners in tests/testing-scripts/.
 After each run, read corresponding markdown report in tests/testing-scripts/results/.
 
 Primary suite:
-- python tests/testing-scripts/full_api_test_runner.py
+- python tests/testing-scripts/slicing/full_api_test_runner.py
 
 Focused suites:
-- python tests/testing-scripts/full_api_orca_fdm_test_runner.py
-- python tests/testing-scripts/full_api_prusa_fdm_test_runner.py
-- python tests/testing-scripts/full_api_prusa_sl1_test_runner.py
-- python tests/testing-scripts/pricing_cycle_test_runner.py
-- python tests/testing-scripts/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
+- python tests/testing-scripts/slicing/full_api_orca_fdm_test_runner.py
+- python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py
+- python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py
+- python tests/testing-scripts/pricing/pricing_cycle_test_runner.py
+- python tests/testing-scripts/admin/admin_output_files_test_runner.py
+- python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
+- python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
+
+Test organization:
+- Keep focused runners small and domain-specific (admin output, rate-limit, queue, pricing).
+- Split oversized runners into focused suites instead of appending unrelated checks.
+- Preserve stable, deterministic runners unless changed endpoint behavior requires updates.
 
 ## Skill Routing
 Prefer mirrored skills:

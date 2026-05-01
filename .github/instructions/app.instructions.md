@@ -4,7 +4,7 @@ applyTo: "app/**"
 
 # App Folder Instructions
 
-Last synchronized: 2026-04-21
+Last synchronized: 2026-05-01
 
 ## Responsibilities
 - app/server.js handles bootstrap, middleware, routes, docs, and static output serving.
@@ -28,12 +28,14 @@ Last synchronized: 2026-04-21
   - DELETE /pricing/:technology/:material (admin-protected)
   - GET /admin/output-files (admin-protected)
   - GET /admin/download/:fileName (admin-protected)
+  - GET /admin/download/:fileName supports `ALL` token for ZIP bulk download
 
 ## Safety Rules
 - Preserve queue and rate-limit protections.
 - Preserve per-client queue fairness cap (MAX_SLICE_QUEUE_PER_IP).
 - Preserve queue/status mapping: SLICE_QUEUE_FULL (503), SLICE_QUEUE_CLIENT_LIMIT (429), SLICE_QUEUE_TIMEOUT (503).
 - Preserve rate-limit response shape and Retry-After behavior for slice/admin throttling.
+- Preserve admin download safety guards for both single-file and ALL-token ZIP responses.
 - Preserve Orca per-request isolated output directory handling.
 - Preserve error code names used by clients.
 - Do not auto-heal invalid geometry.

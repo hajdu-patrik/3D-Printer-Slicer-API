@@ -18,13 +18,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from common.env_utils import resolve_admin_keys, resolve_base_url
 from common.http_utils import curl_multipart_slice
 
 SCRIPTS_ROOT = Path(__file__).resolve().parent
-TESTS_ROOT = SCRIPTS_ROOT.parent / "testing-files"
-PROJECT_ROOT = SCRIPTS_ROOT.parent.parent
-RESULTS_DIR = SCRIPTS_ROOT / "results"
+TESTS_ROOT = SCRIPTS_ROOT.parent.parent / "testing-files"
+PROJECT_ROOT = SCRIPTS_ROOT.parent.parent.parent
+RESULTS_DIR = SCRIPTS_ROOT.parent / "results"
 REPORT_PATH = RESULTS_DIR / "queue_concurrency_test_result.md"
 LEGACY_REPORT_FILES = (
     RESULTS_DIR / "queue_concurrency_test_report.json",

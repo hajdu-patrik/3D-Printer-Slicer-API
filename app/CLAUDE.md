@@ -1,6 +1,6 @@
 # App Folder - Local Claude Guide
 
-Last synchronized: 2026-04-21
+Last synchronized: 2026-05-01
 
 ## Scope
 This document describes the application runtime inside app/.
@@ -140,6 +140,7 @@ This document describes the application runtime inside app/.
 - /orca/slice resolves generated output from per-request isolated output directory before final filename alignment.
 - /health/detailed requires admin API key and exposes subsystem diagnostics including queue and Python availability.
 - /admin/download/:fileName requires valid admin API key and applies path safety guards.
+- /admin/download/:fileName supports ALL token for ZIP bulk download while preserving extension allowlist and path/symlink containment checks.
 - Unsupported routes return JSON 404 with ROUTE_NOT_FOUND.
 
 ## Endpoint and Middleware Chain Map

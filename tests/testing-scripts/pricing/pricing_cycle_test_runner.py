@@ -18,11 +18,13 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import sys
 from pathlib import Path
 
 TESTS_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = TESTS_ROOT.parent.parent
-RESULTS_DIR = TESTS_ROOT / "results"
+sys.path.insert(0, str(TESTS_ROOT.parent))
+PROJECT_ROOT = TESTS_ROOT.parent.parent.parent
+RESULTS_DIR = TESTS_ROOT.parent / "results"
 PRICING_ENDPOINT = "/pricing"
 REPORT_PATH = RESULTS_DIR / "pricing_cycle_test_result.md"
 LEGACY_REPORT_FILES = (

@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Copilot Instructions
 
-Last synchronized: 2026-04-30
+Last synchronized: 2026-05-01
 
 ## Architecture Notice
 This project uses both GitHub Copilot and Claude as primary agentic tools.
@@ -92,6 +92,7 @@ Orca:
 - X-Forwarded-For is only trusted when TRUST_PROXY=true and TRUST_PROXY_CIDRS is configured.
 - Browser-origin requests to /admin/* are restricted through ADMIN_CORS_ALLOWED_ORIGINS.
 - /admin/download/:fileName must enforce extension validation, path containment checks, non-symlink checks, and realpath containment checks.
+- /admin/download/ALL must return ZIP output while preserving the same containment/symlink safety checks.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 
@@ -123,6 +124,15 @@ For multi-domain tasks, use the orchestrator agent workflow to plan and delegate
 
 ## Test Execution Rule
 After every test run, read the generated markdown report under tests/testing-scripts/results/ before concluding.
+
+Focused test runners:
+- tests/testing-scripts/admin/admin_output_files_test_runner.py
+- tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
+
+Test organization:
+- Keep focused runners small and behavior-specific.
+- Split overly complex runners by domain rather than appending unrelated checks.
+- Keep stable deterministic runners unchanged unless endpoint behavior requires updates.
 
 ## Environment and Config Keys
 - ADMIN_API_KEY

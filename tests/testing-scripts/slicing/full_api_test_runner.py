@@ -7,8 +7,12 @@ This runner executes the three dedicated matrix scenarios and writes:
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+_TESTING_SCRIPTS = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_TESTING_SCRIPTS))
 
 from common.slice_matrix_runner import (
     ORCA_SLICE_ENDPOINT,
@@ -18,7 +22,7 @@ from common.slice_matrix_runner import (
     run_scenario,
 )
 
-SCRIPTS_ROOT = Path(__file__).resolve().parent
+SCRIPTS_ROOT = _TESTING_SCRIPTS
 RESULTS_DIR = SCRIPTS_ROOT / "results"
 REPORT_PATH = RESULTS_DIR / "full_api_test_result.md"
 LEGACY_REPORT_FILES = (

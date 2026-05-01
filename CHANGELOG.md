@@ -2,6 +2,49 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.1.3 (2026-05-01)
+
+### Added
+
+- Added `/admin/download/ALL` special token support for ZIP bulk download of all generated output files.
+  - Streams a ZIP archive via `archiver` (v7.0.1) added as new runtime dependency.
+  - Preserves the same extension allowlist, path containment, symlink, and realpath safety checks as single-file download.
+  - Returns `application/zip` content-type with a timestamped `output-files-<timestamp>.zip` filename.
+  - Enforces `MAX_ZIP_ENTRIES` and `MAX_ZIP_UNCOMPRESSED_BYTES` limits to prevent resource exhaustion.
+  - Added `MAX_ZIP_ENTRIES` and `MAX_ZIP_UNCOMPRESSED_BYTES` environment keys (defaults: 500 entries / 500 MB).
+
+### Changed
+
+- Reorganized test runners from flat `tests/testing-scripts/` layout into domain-specific subdirectories:
+  - `tests/testing-scripts/slicing/` — full suite wrapper and engine-specific matrix runners
+  - `tests/testing-scripts/admin/` — admin output listing and download tests
+  - `tests/testing-scripts/pricing/` — pricing lifecycle tests
+  - `tests/testing-scripts/queue/` — queue concurrency tests
+  - `tests/testing-scripts/rate_limit/` — rate-limit regression tests
+- Extracted `resolveOutputDirectoryPaths()` and `resolveValidatedOutputFile()` helpers in `app/routes/system.routes.js` to reduce inline path-validation duplication.
+- Updated OpenAPI definition in `app/docs/swagger-docs.js` to document ALL token behavior, dual content-type response, and fileName parameter description.
+- Updated version metadata to `3.1.3` in project manifests and OpenAPI definition.
+
+### Added (Tests)
+
+- Extended `tests/testing-scripts/admin/admin_output_files_test_runner.py` with ALL-token download checks:
+  - Unauthorized access to `/admin/download/ALL` is rejected (401/503).
+  - Authorized access returns 200 ZIP when output files exist, or 404 when empty.
+- Added new focused runner `tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py`:
+  - Probes `/admin/download/ALL` until 429 and validates `ADMIN_RATE_LIMIT_EXCEEDED` + `Retry-After` semantics.
+  - Probes `/prusa/slice` until 429 and validates `RATE_LIMIT_EXCEEDED` + `Retry-After` semantics.
+  - Reads rate-limit configuration from `.env` with environment defaults as fallback.
+
+### Documentation
+
+- Synced all instruction and guidance files with new paths and ALL-token security rules:
+  - `CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`
+  - `.github/instructions/repository.instructions.md`, `.github/instructions/app.instructions.md`
+  - `.github/instructions/testing-scripts.instructions.md`
+  - `app/CLAUDE.md`, `tests/testing-scripts/CLAUDE.md`
+  - Both `SKILL.md` testing mirrors and both `test-engineer.md` agent definitions
+  - `README.md` — added `/admin/download/:fileName` section with ALL token docs and curl examples
+
 ## v3.1.2 (2026-04-30)
 
 ### Added

@@ -388,6 +388,27 @@ Generated artifacts are stored with the following convention for clarity and tra
 - `InputName-output-<timestamp>.gcode`
 - `InputName-output-<timestamp>.sl1`
 
+### `GET /admin/download/:fileName` (admin)
+
+Downloads a generated `.gcode` / `.sl1` artifact by file name.
+
+Special token support:
+- `ALL` -> returns an `application/zip` stream that contains every currently valid output artifact.
+
+Examples:
+
+```bash
+curl -L -H "x-api-key: <ADMIN_API_KEY>" \
+  http://localhost:3000/admin/download/Cover-output-1777587775846.sl1 \
+  -o Cover-output-1777587775846.sl1
+```
+
+```bash
+curl -L -H "x-api-key: <ADMIN_API_KEY>" \
+  http://localhost:3000/admin/download/ALL \
+  -o output-files.zip
+```
+
 Common slicing error responses:
 - `INVALID_SOURCE_ARCHIVE` → uploaded ZIP is invalid or does not contain a supported file.
 - `INVALID_SOURCE_GEOMETRY` → uploaded source geometry is invalid/non-printable and auto-repair is disabled.
@@ -472,7 +493,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Admin Security:** `ADMIN_API_KEY` environment variable controls access to pricing updates/deletes.
 - **Admin Browser CORS Control:** `/admin/*` browser-origin requests are constrained by `ADMIN_CORS_ALLOWED_ORIGINS`.
 - **Admin File Listing:** `GET /admin/output-files` requires `ADMIN_API_KEY` and returns generated output artifacts.
-- **Admin File Download:** `GET /admin/download/:fileName` requires `ADMIN_API_KEY` and allows downloading `.gcode` / `.sl1` artifacts.
+- **Admin File Download:** `GET /admin/download/:fileName` requires `ADMIN_API_KEY`, allows downloading a single `.gcode` / `.sl1` artifact, and supports `ALL` for ZIP download of all valid output files.
 - **Fail-Fast Security:** Server startup is blocked if `ADMIN_API_KEY` is missing.
 - **Security Logging:** Admin auth failures log client IP with forwarded-header-aware parsing (requires `TRUST_PROXY=true` behind proxy).
 - **Timing-Safe Auth:** Admin API key comparison uses constant-time comparison to prevent timing side-channel attacks.
@@ -521,6 +542,7 @@ This repository currently includes the following synchronized changes across imp
 
 5. **Admin output download hardening**
 - Extension allowlist (`.gcode`, `.sl1`).
+- Special `ALL` token support for ZIP bulk download.
 - Path containment checks, non-symlink checks, and realpath containment checks.
 
 6. **Python subprocess execution hardening**

@@ -39,13 +39,13 @@ Covered endpoints: `/orca/slice`, `/prusa/slice`, `/pricing/*`, `/admin/output-f
 
 ## Available Test Commands
 ```
-python tests/testing-scripts/full_api_test_runner.py
-python tests/testing-scripts/full_api_orca_fdm_test_runner.py
-python tests/testing-scripts/full_api_prusa_fdm_test_runner.py
-python tests/testing-scripts/full_api_prusa_sl1_test_runner.py
-python tests/testing-scripts/pricing_cycle_test_runner.py
-python tests/testing-scripts/admin_output_files_test_runner.py
-python tests/testing-scripts/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
+python tests/testing-scripts/slicing/full_api_test_runner.py
+python tests/testing-scripts/slicing/full_api_orca_fdm_test_runner.py
+python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py
+python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py
+python tests/testing-scripts/pricing/pricing_cycle_test_runner.py
+python tests/testing-scripts/admin/admin_output_files_test_runner.py
+python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
 ```
 
 ## Environment Inputs

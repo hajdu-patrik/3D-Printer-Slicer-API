@@ -15,20 +15,20 @@ Read that file for complete context when writing new tests or extending existing
 ## Quick Command Reference
 
 1. Full suite wrapper
-   - Command: `python tests/testing-scripts/full_api_test_runner.py`
+   - Command: `python tests/testing-scripts/slicing/full_api_test_runner.py`
    - Report: `tests/testing-scripts/results/full_api_test_result.md`
 
 2. Engine-specific matrix runners
-   - Orca FDM: `python tests/testing-scripts/full_api_orca_fdm_test_runner.py`
-   - Prusa FDM: `python tests/testing-scripts/full_api_prusa_fdm_test_runner.py`
-   - Prusa SLA: `python tests/testing-scripts/full_api_prusa_sl1_test_runner.py`
+   - Orca FDM: `python tests/testing-scripts/slicing/full_api_orca_fdm_test_runner.py`
+   - Prusa FDM: `python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py`
+   - Prusa SLA: `python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py`
 
 3. Isolated feature tests
-   - Pricing lifecycle: `python tests/testing-scripts/pricing_cycle_test_runner.py`
-   - Admin output listing: `python tests/testing-scripts/admin_output_files_test_runner.py`
+   - Pricing lifecycle: `python tests/testing-scripts/pricing/pricing_cycle_test_runner.py`
+   - Admin output listing: `python tests/testing-scripts/admin/admin_output_files_test_runner.py`
 
 4. Queue and concurrency test
-   - Command: `python tests/testing-scripts/queue_concurrency_test_runner.py --count <N> --retry-on-429 3`
+   - Command: `python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3`
 
 ## Execution Workflow
 

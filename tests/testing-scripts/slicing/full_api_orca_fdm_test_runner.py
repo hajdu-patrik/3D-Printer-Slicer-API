@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+_TESTING_SCRIPTS = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_TESTING_SCRIPTS))
 
 from common.slice_matrix_runner import ORCA_SLICE_ENDPOINT, SliceScenario, run_scenario
 
-SCRIPTS_ROOT = Path(__file__).resolve().parent
+SCRIPTS_ROOT = _TESTING_SCRIPTS
 
 ORCA_FDM_SCENARIO = SliceScenario(
     key="orca_fdm",

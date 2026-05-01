@@ -4,7 +4,7 @@ applyTo: "**"
 
 # Repository Wide Instructions
 
-Last synchronized: 2026-04-21
+Last synchronized: 2026-05-01
 
 ## Architecture
 - Backend stack is Node.js + Express + Python helper scripts.
@@ -26,6 +26,7 @@ Last synchronized: 2026-04-21
 - Unauthorized admin access logging must include requestId + forwarded-header-aware client IP parsing.
 - Python executable resolution must use absolute validated paths (PYTHON_EXECUTABLE or trusted fallbacks).
 - Admin output download must preserve extension allowlist and path/symlink containment checks.
+- Admin output download supports special token ALL for ZIP bulk export while preserving the same containment/symlink safety checks.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation.
 

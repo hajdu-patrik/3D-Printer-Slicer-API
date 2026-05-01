@@ -8,7 +8,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '3.1.2',
+            version: '3.1.3',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -496,13 +496,15 @@ function createSwaggerDocument(pricing) {
             get: {
                 tags: ['Admin'],
                 summary: 'Download a generated output file from output directory.',
-                description: 'Protected endpoint. Requires x-api-key header. Only .gcode and .sl1 files are allowed.',
+                description:
+                    'Protected endpoint. Requires x-api-key header. Only .gcode and .sl1 files are allowed for direct file download. Use `ALL` as fileName to download every generated output file in a ZIP archive.',
                 parameters: [
                     {
                         name: 'fileName',
                         in: 'path',
                         required: true,
-                        schema: { type: 'string' }
+                        schema: { type: 'string' },
+                        description: 'Output file name (for example `Camera-output-1777587007258.gcode`) or the special token `ALL` for ZIP download.'
                     },
                     {
                         name: 'x-api-key',
@@ -513,9 +515,15 @@ function createSwaggerDocument(pricing) {
                 ],
                 responses: {
                     200: {
-                        description: 'Binary file download stream',
+                        description: 'Binary output stream (`application/octet-stream` for single file or `application/zip` for `ALL` token).',
                         content: {
                             'application/octet-stream': {
+                                schema: {
+                                    type: 'string',
+                                    format: 'binary'
+                                }
+                            },
+                            'application/zip': {
                                 schema: {
                                     type: 'string',
                                     format: 'binary'

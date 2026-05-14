@@ -1,6 +1,11 @@
 ---
 name: python-developer
 description: Python developer agent for the 3D Printer Slicer API. Handles converter scripts, orientation optimization, and scaling logic.
+tools:
+  - read
+  - edit
+  - search
+  - execute
 ---
 
 # Python Developer Agent

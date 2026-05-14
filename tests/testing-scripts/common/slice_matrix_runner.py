@@ -27,6 +27,16 @@ SUPPORTED_EXTENSIONS = {
 
 
 @dataclass(frozen=True)
+class ExpectedFailure:
+    """Expected non-2xx API response for a specific matrix case."""
+
+    file: str
+    status: int
+    error_codes: tuple[str, ...]
+    reason: str
+
+
+@dataclass(frozen=True)
 class SliceScenario:
     """Single scenario configuration for matrix execution."""
 
@@ -38,6 +48,7 @@ class SliceScenario:
     layer_heights: tuple[float, ...]
     report_filename: str
     legacy_report_files: tuple[str, ...] = ()
+    expected_failures: tuple[ExpectedFailure, ...] = ()
 
 
 @dataclass
@@ -144,6 +155,37 @@ def expected_hint_for_category(category: str) -> str:
     if category == "vector":
         return "mixed_expected_some_fail"
     return "unknown"
+
+
+def find_expected_failure(scenario: SliceScenario, relative_file: str) -> ExpectedFailure | None:
+    """Resolve explicit expected failure for a scenario/file pair."""
+    normalized_file = relative_file.replace("\\", "/").lower()
+    for expected_failure in scenario.expected_failures:
+        if expected_failure.file.replace("\\", "/").lower() == normalized_file:
+            return expected_failure
+    return None
+
+
+def expected_hint_for_case(category: str, expected_failure: ExpectedFailure | None) -> str:
+    """Return the concrete expectation label for a single matrix case."""
+    if expected_failure:
+        codes = "/".join(expected_failure.error_codes) if expected_failure.error_codes else "any_error"
+        return f"expected_{expected_failure.status}_{codes}"
+    return expected_hint_for_category(category)
+
+
+def matches_expected_failure(
+    *,
+    status: int,
+    error_code: str | None,
+    expected_failure: ExpectedFailure | None,
+) -> bool:
+    """Check whether an API response matches an explicit expected failure."""
+    if not expected_failure or status != expected_failure.status:
+        return False
+    if not expected_failure.error_codes:
+        return True
+    return error_code in expected_failure.error_codes
 
 
 def run_slice_request(
@@ -357,8 +399,8 @@ def markdown_summary(report_title: str, results: Iterable[TestCaseResult], gener
         f"Success: **{ok}**",
         f"Failed: **{bad}**",
         "",
-        "| # | Engine | Tech | Endpoint | File | Layer | Status | Success | RateFromPricing | ErrorCode |",
-        "|---:|:------:|:----:|:---------|:-----|------:|------:|:-------:|:--------------:|:---------|",
+        "| # | Engine | Tech | Endpoint | File | Layer | Expected | Status | Success | RateFromPricing | ErrorCode |",
+        "|---:|:------:|:----:|:---------|:-----|------:|:---------|------:|:-------:|:--------------:|:---------|",
     ]
 
     def rate_match_icon(result: TestCaseResult) -> str:
@@ -371,7 +413,7 @@ def markdown_summary(report_title: str, results: Iterable[TestCaseResult], gener
     for row in rows:
         lines.append(
             f"| {row.index} | {resolve_engine_name(row.endpoint)} | {row.technology} | "
-            f"`{row.endpoint}` | `{row.file}` | {row.layer_height} | {row.http_status} | "
+            f"`{row.endpoint}` | `{row.file}` | {row.layer_height} | `{row.expected_hint}` | {row.http_status} | "
             f"{'✅' if row.success else '❌'} | {rate_match_icon(row)} | {row.error_code or '-'} |"
         )
 
@@ -419,7 +461,9 @@ def run_scenario(
     for file_path in files:
         layer_height = next(layer_cycle)
         category = classify(file_path)
-        expected_hint = expected_hint_for_category(category)
+        relative_file = str(file_path.relative_to(tests_root)).replace("\\", "/")
+        expected_failure = find_expected_failure(scenario, relative_file)
+        expected_hint = expected_hint_for_case(category, expected_failure)
         extra_fields = build_extra_fields(scenario.endpoint, scenario.technology, layer_height)
 
         print(
@@ -455,12 +499,24 @@ def run_scenario(
             expected_fields=extra_fields,
         )
 
+        if expected_failure:
+            success = matches_expected_failure(
+                status=status,
+                error_code=error_code,
+                expected_failure=expected_failure,
+            )
+            if not success:
+                error_message = (
+                    f"Expected {expected_failure.status} with "
+                    f"{expected_failure.error_codes}, got status={status}, errorCode={error_code}"
+                )
+
         rows.append(
             TestCaseResult(
                 index=req_index,
                 endpoint=scenario.endpoint,
                 technology=scenario.technology,
-                file=str(file_path.relative_to(tests_root)).replace("\\", "/"),
+                file=relative_file,
                 category=category,
                 layer_height=layer_height,
                 material=scenario.material,

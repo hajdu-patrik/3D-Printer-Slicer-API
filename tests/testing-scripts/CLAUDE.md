@@ -1,11 +1,13 @@
 # Testing Scripts - Local Claude Guide
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Scope
+
 This folder contains API-level Python integration and workflow tests.
 
 ## Main Runner Groups
+
 - `slicing/` — Full suite and slicer matrix runners
   - slicing/full_api_test_runner.py
   - slicing/full_api_orca_fdm_test_runner.py
@@ -25,26 +27,34 @@ This folder contains API-level Python integration and workflow tests.
   - rate_limit/rate_limit_regression_test_runner.py
 
 ## Shared Helpers
+
 Located in tests/testing-scripts/common/:
+
 - env_utils.py
 - http_utils.py
 - slice_matrix_runner.py
 
 ## Reporting Contract
+
 All test outputs must be written to tests/testing-scripts/results/.
 After execution, always read the generated markdown report file.
 
 ## Execution Policy
+
 - Prefer Docker-based API runtime for integration validations.
 - Keep test runners deterministic and avoid changing endpoint contracts through tests.
 
 ## Runtime Inputs
+
 - SLICER_BASE_URL from .env, fallback to default local base URL.
 - ADMIN_API_KEY required for admin endpoint tests.
 
 ## Local Rules
+
 - Prefer existing runner patterns over adding ad-hoc scripts.
 - Keep reports deterministic and easy to diff.
 - Preserve endpoint coverage when endpoint behavior changes.
 - Keep focused runners behavior-specific; split oversized runners into domain-focused suites.
 - Keep stable deterministic runners unchanged unless changed endpoint behavior requires edits.
+- Full slice matrix reports may mark explicitly declared fail-fast rejections as passing only when status and `errorCode` match the expected case exactly.
+- Queue concurrency reports use staggered completion as the black-box signal for serialized queue processing; client start-order matching is informational.

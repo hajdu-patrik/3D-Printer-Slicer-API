@@ -1,6 +1,6 @@
 # App Folder - Local Claude Guide
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Scope
 This document describes the application runtime inside app/.
@@ -59,7 +59,7 @@ This document describes the application runtime inside app/.
 - app/routes/system.routes.js
   - Declares GET /health and GET /health/detailed.
   - Declares GET /admin/output-files and GET /admin/download/:fileName.
-  - Hardened file download path validation includes extension allowlist, path containment, lstat non-symlink checks, and realpath containment checks.
+  - Delegates hardened output listing/download validation to app/services/admin-output.service.js.
 
 ### Services: top-level
 - app/services/pricing.service.js
@@ -75,6 +75,9 @@ This document describes the application runtime inside app/.
   - Central orchestrator for slice requests.
   - Validates upload, parses options, enqueues job by client IP, preprocesses model, runs slicer command, parses stats, computes pricing, and returns response.
   - Maps queue-layer failures into stable API error codes and status codes.
+- app/services/admin-output.service.js
+  - Validates generated output artifacts for admin listing, single-file download, and ALL-token ZIP export.
+  - Applies extension allowlist, path containment, non-symlink target checks, realpath containment, and bulk ZIP resource limits.
 
 ### Services: slice submodules
 - app/services/slice/command.js
@@ -140,7 +143,7 @@ This document describes the application runtime inside app/.
 - /orca/slice resolves generated output from per-request isolated output directory before final filename alignment.
 - /health/detailed requires admin API key and exposes subsystem diagnostics including queue and Python availability.
 - /admin/download/:fileName requires valid admin API key and applies path safety guards.
-- /admin/download/:fileName supports ALL token for ZIP bulk download while preserving extension allowlist and path/symlink containment checks.
+- /admin/download/:fileName supports ALL token for ZIP bulk download while preserving extension allowlist, path/symlink containment checks, and MAX_ZIP_ENTRIES/MAX_ZIP_UNCOMPRESSED_BYTES limits.
 - Unsupported routes return JSON 404 with ROUTE_NOT_FOUND.
 
 ## Endpoint and Middleware Chain Map

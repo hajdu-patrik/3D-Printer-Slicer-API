@@ -4,7 +4,7 @@ applyTo: "tests/testing-scripts/**"
 
 # Testing Scripts Instructions
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Test Entry Points
 - slicing/full_api_test_runner.py
@@ -25,6 +25,8 @@ Last synchronized: 2026-05-01
 - Keep queue/rate-limit regression checks in dedicated runners.
 - Keep focused runners small; split complex runners by domain instead of adding unrelated checks.
 - Keep stable deterministic runners unchanged unless endpoint behavior changes.
+- Full slice matrix reports may mark explicitly declared fail-fast rejections as passing only when status and `errorCode` match the expected case exactly.
+- Queue concurrency reports use staggered completion as the black-box signal for serialized queue processing; client start-order matching is informational.
 
 ## Environment Inputs
 - SLICER_BASE_URL

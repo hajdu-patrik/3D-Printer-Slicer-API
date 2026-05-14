@@ -8,7 +8,7 @@ Use this skill for container lifecycle operations in this repository.
 Slash entrypoint:
 - Use `/docker-ops` for startup, restart, logs, health checks, and cleanup operations.
 
-Full agent definition with architecture context, security configuration, hard rules, and scope boundaries is in `.github/agents/docker-specialist.md`.
+Full agent definitions with architecture context, security configuration, hard rules, and scope boundaries are mirrored in `.github/agents/docker-specialist.md` and `.claude/agents/docker-specialist.md`.
 Read that file for complete context before performing Docker operations.
 
 ## Quick Command Reference

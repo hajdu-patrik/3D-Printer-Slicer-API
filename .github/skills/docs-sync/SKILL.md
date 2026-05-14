@@ -8,7 +8,7 @@ Use this skill to bring all mirrored documentation and instruction files in sync
 Slash entrypoint:
 - Use `/docs-sync` to run the full synchronization workflow.
 
-Full agent definition with file ownership, responsibilities, execution checklist, and scope boundaries is in `.github/agents/docs-syncer.md`.
+Full agent definitions with file ownership, responsibilities, execution checklist, and scope boundaries are mirrored in `.github/agents/docs-syncer.md` and `.claude/agents/docs-syncer.md`.
 Read that file for complete context before performing documentation synchronization.
 
 ## Files To Synchronize
@@ -27,6 +27,9 @@ Also keep these aligned when relevant:
 - `.github/instructions/github.instructions.md`
 - `README.md`
 - `.claude/CLAUDE.md`
+- `.github/agents/*` and `.claude/agents/*`
+- `.github/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md`
+- `.claude/.mcp.template.json` when optional MCP workflows change
 
 ## Analysis Workflow
 
@@ -34,6 +37,7 @@ Also keep these aligned when relevant:
 2. Capture the concrete deltas: endpoints, security, queue/rate behavior, env keys, workflows.
 3. Update all mirrored docs in one pass.
 4. Re-check touched docs for contradiction or drift.
+5. Keep local MCP secrets out of versioned files; commit templates only.
 
 ## When To Run
 
@@ -42,6 +46,7 @@ Also keep these aligned when relevant:
 - Slicing pipeline flow or error-code behavior changed.
 - Environment variables, config keys, profile rules, or defaults changed.
 - Folder ownership or workflow conventions changed.
+- Agent, skill, or optional MCP workflow conventions changed.
 
 ## Guardrails
 

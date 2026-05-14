@@ -8,7 +8,7 @@ function createSwaggerDocument(pricing) {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '3.1.3',
+            version: '3.1.4',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -497,7 +497,7 @@ function createSwaggerDocument(pricing) {
                 tags: ['Admin'],
                 summary: 'Download a generated output file from output directory.',
                 description:
-                    'Protected endpoint. Requires x-api-key header. Only .gcode and .sl1 files are allowed for direct file download. Use `ALL` as fileName to download every generated output file in a ZIP archive.',
+                    'Protected endpoint. Requires x-api-key header. Only .gcode and .sl1 files are allowed for direct file download. Use `ALL` as fileName to download every generated output file in a ZIP archive within MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES limits.',
                 parameters: [
                     {
                         name: 'fileName',
@@ -534,6 +534,7 @@ function createSwaggerDocument(pricing) {
                     400: { description: 'Invalid file name/path' },
                     401: { description: 'Unauthorized' },
                     404: { description: 'Output file not found' },
+                    413: { description: 'Bulk ZIP download exceeds configured MAX_ZIP_ENTRIES or MAX_ZIP_UNCOMPRESSED_BYTES limits' },
                     503: { description: 'Admin API key is not configured on server' },
                     500: { description: 'Failed to download output file' }
                 }

@@ -1,11 +1,13 @@
 # Configs Folder - Local Claude Guide
 
-Last synchronized: 2026-04-21
+Last synchronized: 2026-05-14
 
 ## Scope
+
 This folder contains runtime configuration files used by slicing and pricing.
 
 ## Files
+
 - configs/pricing.json
   - Active pricing matrix for FDM and SLA materials.
   - Read and written by app/services/pricing.service.js.
@@ -22,6 +24,7 @@ This folder contains runtime configuration files used by slicing and pricing.
   - Machine and process compatibility must be respected.
 
 ## Safety Constraints
+
 - Keep this folder at repository root (not under app/).
 - Do not rename existing profile files without updating profile resolution logic.
 - Preserve pricing schema shape:
@@ -29,6 +32,7 @@ This folder contains runtime configuration files used by slicing and pricing.
   - SLA: material -> number
 
 ## Related Runtime Keys
+
 - ORCA_MACHINE_PROFILE
 - ORCA_PROCESS_PROFILE_0_1
 - ORCA_PROCESS_PROFILE_0_2

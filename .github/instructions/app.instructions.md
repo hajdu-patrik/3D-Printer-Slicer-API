@@ -4,11 +4,12 @@ applyTo: "app/**"
 
 # App Folder Instructions
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Responsibilities
 - app/server.js handles bootstrap, middleware, routes, docs, and static output serving.
 - app/routes should stay lightweight and delegate to services.
+- app/routes/system.routes.js delegates admin output listing/download validation to app/services/admin-output.service.js.
 - app/services/pricing.service.js remains the facade API; pricing persistence and pricing-domain logic live in app/services/pricing/ submodules.
 - app/services/slice/ contains modular pipeline logic (options, queue, transform, profiles, errors).
 - app/middleware uses shared client IP parsing based on Express trust-proxy configuration (TRUST_PROXY + TRUST_PROXY_CIDRS).
@@ -36,6 +37,7 @@ Last synchronized: 2026-05-01
 - Preserve queue/status mapping: SLICE_QUEUE_FULL (503), SLICE_QUEUE_CLIENT_LIMIT (429), SLICE_QUEUE_TIMEOUT (503).
 - Preserve rate-limit response shape and Retry-After behavior for slice/admin throttling.
 - Preserve admin download safety guards for both single-file and ALL-token ZIP responses.
+- Preserve ALL-token ZIP resource limits using MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES.
 - Preserve Orca per-request isolated output directory handling.
 - Preserve error code names used by clients.
 - Do not auto-heal invalid geometry.

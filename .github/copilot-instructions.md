@@ -1,12 +1,13 @@
 # 3D Printer Slicer API - Copilot Instructions
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Architecture Notice
 This project uses both GitHub Copilot and Claude as primary agentic tools.
 If architecture/domain rules change in this file, synchronize changes in:
 - CLAUDE.md
 - .claude/CLAUDE.md
+- .github/agents/* and .claude/agents/*
 - .github/skills/*
 - .claude/skills/*
 - .github/instructions/*
@@ -65,6 +66,8 @@ Admin protected (x-api-key):
 - MAX_SLICE_QUEUE_PER_IP default: 5
 - MAX_SLICE_QUEUE_WAIT_MS default: 300000
 - Slice command timeout default: 600000 ms
+- MAX_ZIP_ENTRIES default: 500
+- MAX_ZIP_UNCOMPRESSED_BYTES default: 524288000
 
 ## Queue and Rate Behavior Details
 - Slice and admin throttling return HTTP 429 with Retry-After and retryAfterSeconds.
@@ -92,7 +95,7 @@ Orca:
 - X-Forwarded-For is only trusted when TRUST_PROXY=true and TRUST_PROXY_CIDRS is configured.
 - Browser-origin requests to /admin/* are restricted through ADMIN_CORS_ALLOWED_ORIGINS.
 - /admin/download/:fileName must enforce extension validation, path containment checks, non-symlink checks, and realpath containment checks.
-- /admin/download/ALL must return ZIP output while preserving the same containment/symlink safety checks.
+- /admin/download/ALL must return ZIP output while preserving the same containment/symlink safety checks plus MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES limits.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 
@@ -121,6 +124,17 @@ Mirrored in `.github/agents/` and `.claude/agents/`:
 - quality-architect — iterative OOP/SOLID/design-principles refactor workflow with 23-point checklist
 
 For multi-domain tasks, use the orchestrator agent workflow to plan and delegate.
+
+Workflow gates:
+- Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
+- Run quality-architect for non-trivial source changes or files near the decomposition guardrails.
+- Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
+- Run docs-sync last and update mirrored agent/skill assets when workflow policy changes.
+- Perform changelog/version/tag work only after validation is green.
+
+Optional MCP:
+- `.claude/.mcp.template.json` is a credential-free local MCP template.
+- `.claude/.mcp.json` is local-only and must not be committed.
 
 ## Test Execution Rule
 After every test run, read the generated markdown report under tests/testing-scripts/results/ before concluding.
@@ -182,3 +196,4 @@ Instruction overlays:
 - .github/instructions/configs.instructions.md
 - .github/instructions/testing-scripts.instructions.md
 - .github/instructions/github.instructions.md
+- .claude/.mcp.template.json

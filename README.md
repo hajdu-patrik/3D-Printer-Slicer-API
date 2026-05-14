@@ -1,4 +1,6 @@
-<img width="2048" height="2048" alt="API-LOGO" src="https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a" />
+# 3D Printer Slicer API (FDM & SLA)
+
+![3D Printer Slicer API logo](https://github.com/user-attachments/assets/61739b97-e3ab-4335-a127-5a1370111a5a)
 
 ![Node.js](https://img.shields.io/badge/Node.js-20.20.2-339933?style=flat&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Backend-Express_4.18.2-000000?style=flat&logo=express&logoColor=white)
@@ -9,8 +11,6 @@
 ![Ubuntu Next](https://img.shields.io/badge/Next-Ubuntu_24.04-E95420?style=flat&logo=ubuntu&logoColor=white)
 ![API](https://img.shields.io/badge/API-Prusa%2FOrca_Endpoints-success?style=flat)
 
-# 3D Printer Slicer API (FDM & SLA)
-
 An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts multiple 2D/3D input types into printable outputs with validated pricing.
 
 Built for zero-downtime rollout, this API now supports two slicer engines through separate public endpoints.
@@ -19,7 +19,7 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 
 ## ✨ Core Features
 
-- 🔄 **Universal input processing:** direct 3D, CAD, vector, image, and ZIP first-supported extraction.
+- 🔄 **Universal input processing:** direct 3D, CAD, vector, image, and ZIP uploads with exactly one supported source file.
 - ⚖️ **Auto-orientation:** Python-based orientation optimization before slicing.
 - 🧮 **Pricing engine:** dynamic hourly-rate calculation from persisted pricing map.
 - 🚦 **Queue + rate protection:** bounded queue and endpoint rate limiting for CPU-heavy requests.
@@ -31,7 +31,7 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 ## 📂 Supported File Formats
 
 | Category | Extensions |
-|---|---|
+| --- | --- |
 | Direct 3D | `.stl`, `.obj`, `.3mf` |
 | NURBS / CAD | `.stp`, `.step`, `.igs`, `.iges`, `.ply` |
 | Vector | `.dxf`, `.svg`, `.eps`, `.pdf` |
@@ -60,6 +60,7 @@ Public endpoints do not require admin key.
 - `POST /orca/slice`
 - `GET /openapi.json`
 - `GET /docs`
+- `GET /`
 
 ### Admin-protected
 
@@ -100,6 +101,7 @@ Public endpoints do not require admin key.
 ### Services
 
 - `app/services/pricing.service.js` - pricing load/save/migration/lookup logic.
+- `app/services/admin-output.service.js` - validated admin output listing/download helpers and `ALL` ZIP bulk limit checks.
 - `app/services/slice.service.js` - end-to-end slicing orchestrator and queue error mapping.
 - `app/services/slice/command.js` - subprocess execution via `execFile` with timeout and optional debug logs.
 - `app/services/slice/common.js` - output naming, isolated Orca output dirs, cleanup utilities.
@@ -393,7 +395,10 @@ Generated artifacts are stored with the following convention for clarity and tra
 Downloads a generated `.gcode` / `.sl1` artifact by file name.
 
 Special token support:
+
 - `ALL` -> returns an `application/zip` stream that contains every currently valid output artifact.
+
+Bulk `ALL` downloads are validated before streaming and return HTTP `413` with `BULK_DOWNLOAD_LIMIT_EXCEEDED` if the current output set exceeds `MAX_ZIP_ENTRIES` or `MAX_ZIP_UNCOMPRESSED_BYTES`.
 
 Examples:
 
@@ -410,6 +415,7 @@ curl -L -H "x-api-key: <ADMIN_API_KEY>" \
 ```
 
 Common slicing error responses:
+
 - `INVALID_SOURCE_ARCHIVE` → uploaded ZIP is invalid or does not contain a supported file.
 - `INVALID_SOURCE_GEOMETRY` → uploaded source geometry is invalid/non-printable and auto-repair is disabled.
 - `FILE_PROCESSING_TIMEOUT` (HTTP `422`) → processing exceeded 10 minutes for the uploaded file.
@@ -418,13 +424,13 @@ Common slicing error responses:
 
 ## 🔏 Learn how to setup the `.env`, configs, input/output
 
-#### 1. Create your env file from template:
+### 1. Create your env file from template
 
 ```bash
 cp .env.example .env
 ```
 
-#### 2. Create your pricing configuration file from the template:
+### 2. Create your pricing configuration file from the template
 
 ```bash
 cp configs/pricing.example.json configs/pricing.json
@@ -448,13 +454,16 @@ cp configs/pricing.example.json configs/pricing.json
 }
 ```
 
-#### 3. Set at least `ADMIN_API_KEY` in `.env`.
+### 3. Set at least `ADMIN_API_KEY` in `.env`
 
-#### 4. Start the app:
-  - local: `npm start`
-  - docker: `docker compose up -d --build`
+### 4. Start the app
 
-#### 5. The app now reads `.env` automatically on local startup via `dotenv`, and Docker reads it via `env_file`.
+- local: `npm start`
+- docker: `docker compose up -d --build`
+
+### 5. Runtime environment loading
+
+The app reads `.env` automatically on local startup via `dotenv`, and Docker reads it via `env_file`.
 
 ### Runtime folders used by the program
 
@@ -493,7 +502,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Admin Security:** `ADMIN_API_KEY` environment variable controls access to pricing updates/deletes.
 - **Admin Browser CORS Control:** `/admin/*` browser-origin requests are constrained by `ADMIN_CORS_ALLOWED_ORIGINS`.
 - **Admin File Listing:** `GET /admin/output-files` requires `ADMIN_API_KEY` and returns generated output artifacts.
-- **Admin File Download:** `GET /admin/download/:fileName` requires `ADMIN_API_KEY`, allows downloading a single `.gcode` / `.sl1` artifact, and supports `ALL` for ZIP download of all valid output files.
+- **Admin File Download:** `GET /admin/download/:fileName` requires `ADMIN_API_KEY`, allows downloading a single `.gcode` / `.sl1` artifact, and supports `ALL` for ZIP download of all valid output files within configured ZIP limits.
 - **Fail-Fast Security:** Server startup is blocked if `ADMIN_API_KEY` is missing.
 - **Security Logging:** Admin auth failures log client IP with forwarded-header-aware parsing (requires `TRUST_PROXY=true` behind proxy).
 - **Timing-Safe Auth:** Admin API key comparison uses constant-time comparison to prevent timing side-channel attacks.
@@ -505,7 +514,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Queue Fairness:** Per-client queue ownership is bounded (`MAX_SLICE_QUEUE_PER_IP`) so one client cannot monopolize all pending capacity.
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
 - **Upload Body Limit:** Multipart upload size is capped (`MAX_UPLOAD_BYTES`, default `500MB`).
-- **ZIP Safety Limits:** ZIP extraction is guarded by max entries (`MAX_ZIP_ENTRIES`, default `10`) and max cumulative extracted size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
+- **ZIP Safety Limits:** ZIP upload inspection and admin `ALL` bulk export are guarded by max entries (`MAX_ZIP_ENTRIES`, default `500`) and max cumulative size (`MAX_ZIP_UNCOMPRESSED_BYTES`, default `500MB`).
 - **ZIP Content Rule:** ZIP uploads must contain exactly one supported source file; unsupported or suspicious ZIP contents are rejected and cleaned up.
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
@@ -521,42 +530,14 @@ You can customize pricing, security, and slicing behavior without changing endpo
 
 This repository currently includes the following synchronized changes across implementation and docs:
 
-1. **Admin security hardening**
-- Mandatory startup guard for `ADMIN_API_KEY`.
-- Timing-safe API key verification for admin routes.
-- Request-id-aware unauthorized logging.
-
-2. **Rate-limit controls**
-- Dedicated admin limiter (`ADMIN_RATE_LIMIT_EXCEEDED`).
-- Public slicing limiter (`RATE_LIMIT_EXCEEDED`).
-- Retry-After-aware 429 responses.
-
-3. **Proxy trust controls**
-- Forwarded header trust only when `TRUST_PROXY=true` and `TRUST_PROXY_CIDRS` is configured.
-- Shared normalized client IP resolution.
-
-4. **Queue fairness and resilience**
-- FIFO queue with bounded concurrency.
-- Per-client queued+active cap (`MAX_SLICE_QUEUE_PER_IP`).
-- Queue wait timeout and explicit queue error codes.
-
-5. **Admin output download hardening**
-- Extension allowlist (`.gcode`, `.sl1`).
-- Special `ALL` token support for ZIP bulk download.
-- Path containment checks, non-symlink checks, and realpath containment checks.
-
-6. **Python subprocess execution hardening**
-- Centralized Python executable resolution.
-- Absolute-path validation and startup fail-fast behavior.
-- Shared secure subprocess execution path for converter/orientation/transform scripts.
-
-7. **Docker supply-chain validation**
-- Build-time SHA256 verification for slicer AppImages.
-
-8. **Documentation synchronization**
-- Global guides (`CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`).
-- Folder-local guides (`app/CLAUDE.md`, `configs/CLAUDE.md`, `tests/testing-scripts/CLAUDE.md`).
-- Instruction overlays under `.github/instructions/*`.
+- **Admin security hardening:** mandatory startup guard for `ADMIN_API_KEY`, timing-safe API key verification, and request-id-aware unauthorized logging.
+- **Rate-limit controls:** dedicated admin limiter (`ADMIN_RATE_LIMIT_EXCEEDED`), public slicing limiter (`RATE_LIMIT_EXCEEDED`), and Retry-After-aware 429 responses.
+- **Proxy trust controls:** forwarded header trust only when `TRUST_PROXY=true` and `TRUST_PROXY_CIDRS` is configured, with shared normalized client IP resolution.
+- **Queue fairness and resilience:** FIFO queue with bounded concurrency, per-client queued+active cap (`MAX_SLICE_QUEUE_PER_IP`), queue wait timeout, and explicit queue error codes.
+- **Admin output download hardening:** extension allowlist (`.gcode`, `.sl1`), `ALL` ZIP bulk download support, path/symlink/realpath checks, and pre-stream bulk ZIP resource limits.
+- **Python subprocess execution hardening:** centralized Python executable resolution, absolute-path validation, startup fail-fast behavior, and secure converter/orientation/transform subprocess execution.
+- **Docker supply-chain validation:** build-time SHA256 verification for slicer AppImages.
+- **Documentation synchronization:** global guides, folder-local guides, and instruction overlays under `.github/instructions/*`.
 
 ---
 
@@ -578,5 +559,5 @@ Detailed version history is maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 If this project helps your workflow, you can support ongoing development here:
 
-- Buy Me a Coffee: https://www.buymeacoffee.com/3D.Printer.Slicer.API
-- GitHub Sponsors: https://github.com/sponsors/hajdu-patrik
+- [Buy Me a Coffee](https://www.buymeacoffee.com/3D.Printer.Slicer.API)
+- [GitHub Sponsors](https://github.com/sponsors/hajdu-patrik)

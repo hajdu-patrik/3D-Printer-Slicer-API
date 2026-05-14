@@ -4,7 +4,7 @@ applyTo: "**"
 
 # Repository Wide Instructions
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Architecture
 - Backend stack is Node.js + Express + Python helper scripts.
@@ -26,13 +26,19 @@ Last synchronized: 2026-05-01
 - Unauthorized admin access logging must include requestId + forwarded-header-aware client IP parsing.
 - Python executable resolution must use absolute validated paths (PYTHON_EXECUTABLE or trusted fallbacks).
 - Admin output download must preserve extension allowlist and path/symlink containment checks.
-- Admin output download supports special token ALL for ZIP bulk export while preserving the same containment/symlink safety checks.
+- Admin output download supports special token ALL for ZIP bulk export while preserving the same containment/symlink safety checks plus MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES limits.
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation.
 
 ## Testing
 - Use Python test runners under tests/testing-scripts/.
 - Always read generated markdown report from tests/testing-scripts/results/ after runs.
+
+## Agentic Workflow Gates
+- Run fast syntax validation before integration tests when source files change.
+- Run quality-architect for non-trivial source changes or decomposition guardrail pressure.
+- Run docs-sync after code/test/workflow updates settle.
+- Keep `.claude/.mcp.template.json` credential-free; never commit `.claude/.mcp.json`.
 
 ## Multi-agent Sync
 When changing architecture/domain policies, keep synchronized:
@@ -41,3 +47,5 @@ When changing architecture/domain policies, keep synchronized:
 - .claude/CLAUDE.md
 - .github/skills/*
 - .claude/skills/*
+- .github/agents/*
+- .claude/agents/*

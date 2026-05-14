@@ -234,19 +234,19 @@ def run_one_request(
 
 def evaluate_order(results: list[QueueRequestResult]) -> dict:
     if len(results) < 2:
-        return {"arrival_order_kept": None, "reason": "at least 2 requests required"}
+        return {"client_start_order_kept": None, "reason": "at least 2 requests required"}
 
     if any(r.attempts > 1 for r in results):
         return {
-            "arrival_order_kept": None,
-            "reason": "one or more requests were rate-limited and retried; accepted-arrival order is inconclusive",
+            "client_start_order_kept": None,
+            "reason": "one or more requests were rate-limited and retried; completion order is inconclusive",
         }
 
     ordered_start = sorted(results, key=lambda r: r.started_at)
     ordered_end = sorted(results, key=lambda r: r.ended_at)
     completion_order = [r.index for r in ordered_end]
-    expected_order = [r.index for r in ordered_start]
-    arrival_order_kept = completion_order == expected_order
+    client_start_order = [r.index for r in ordered_start]
+    client_start_order_kept = completion_order == client_start_order
 
     first_end = ordered_end[0].ended_at
     last_end = ordered_end[-1].ended_at
@@ -256,14 +256,14 @@ def evaluate_order(results: list[QueueRequestResult]) -> dict:
     staggered = spread >= expected_min_spread
 
     return {
-        "arrival_order_kept": arrival_order_kept,
+        "client_start_order_kept": client_start_order_kept,
         "completion_order": completion_order,
-        "expected_arrival_order": expected_order,
+        "client_start_order": client_start_order,
         "staggered": staggered,
         "spread_sec": round(spread, 3),
         "min_single_duration_sec": round(min_duration, 3),
         "expected_min_spread_sec": round(expected_min_spread, 3),
-        "note": "Heuristic black-box check. With MAX_CONCURRENT_SLICES=1, completion order should match arrival order.",
+        "note": "Heuristic black-box check. Staggered completion is the actionable signal for serialized queue processing; exact client start order can vary under concurrent scheduling.",
     }
 
 
@@ -284,8 +284,9 @@ def markdown_summary(results: Iterable[QueueRequestResult], generated_at: str, e
         f"Total concurrent requests: **{total}**",
         f"Success: **{ok}**",
         f"Failed: **{bad}**",
-        f"Arrival order kept: **{order_check.get('arrival_order_kept')}**",
+        f"Completion matched client start order: **{order_check.get('client_start_order_kept')}**",
         f"Staggered completion: **{order_check.get('staggered')}**",
+        f"Queue heuristic note: **{order_check.get('note') or order_check.get('reason')}**",
         "",
         "| # | Engine | File | Attempts | Status | Success | Duration(s) | ErrorCode |",
         "|---:|:------:|:-----|---------:|------:|:-------:|-----------:|:---------|",
@@ -372,9 +373,9 @@ def main() -> int:
 
     print(f"[QUEUE TEST] Report: {REPORT_PATH}")
     print(f"[QUEUE TEST] Success={success_count} Fail={fail_count}")
-    if order_check.get("arrival_order_kept") is not None:
+    if order_check.get("client_start_order_kept") is not None:
         print(
-            f"[QUEUE TEST] Arrival order kept: {order_check['arrival_order_kept']} "
+            f"[QUEUE TEST] Completion matched client start order: {order_check['client_start_order_kept']} "
             f"| staggered={order_check.get('staggered')} | spread={order_check.get('spread_sec')}s"
         )
 

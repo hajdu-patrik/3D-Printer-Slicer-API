@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.1.4 (2026-05-14)
+
+### Fixed
+
+- Hardened `/admin/download/ALL` by enforcing `MAX_ZIP_ENTRIES` and `MAX_ZIP_UNCOMPRESSED_BYTES` before ZIP streaming begins.
+- Corrected admin output listing to reuse the same validated output-file path, symlink, extension, and realpath checks as downloads.
+- Updated the admin output test runner to accept HTTP `413` with `BULK_DOWNLOAD_LIMIT_EXCEEDED` when the current output set exceeds configured bulk ZIP limits.
+- Updated the full API slice matrix to treat explicitly declared fail-fast geometry/bounds rejections as passing behavior when the status and `errorCode` match exactly.
+- Clarified the queue concurrency report so client start-order matching is informational and staggered completion remains the black-box queue serialization signal.
+- Aligned `package-lock.json` root metadata with `package.json` and corrected the package `main` entry to `app/server.js`.
+
+### Changed
+
+- Added `app/services/admin-output.service.js` to keep admin output listing/download validation outside route handlers.
+- Updated `MAX_ZIP_ENTRIES` default to `500` across runtime constants and `.env.example`, matching the documented bulk export default.
+- Bumped package and OpenAPI metadata to `3.1.4`.
+- Refined README markdown formatting, endpoint listing, ZIP upload wording, and admin `ALL` bulk-limit documentation.
+
+### Agentic Workflow
+
+- Added explicit tool allowlists to mirrored `.github/agents/*` and `.claude/agents/*` agent definitions.
+- Improved orchestrator workflow gates for fast validation, quality review, scoped test selection, docs-sync, and release/tag sequencing.
+- Added `.claude/.mcp.template.json` as a credential-free optional Docker MCP template and ignored local `.claude/.mcp.json`.
+- Synchronized mirrored skills and docs-sync guidance for agent/skill/MCP workflow assets.
+
+### Validation
+
+- `node --check` passed for all `app/**/*.js` files.
+- `python -m py_compile` passed for all `app/**/*.py` and `tests/testing-scripts/**/*.py` files.
+- `npm audit --audit-level=high` reported 0 vulnerabilities.
+- Docker Compose rebuild completed and `GET /health` returned HTTP 200.
+- Pricing, admin output, queue concurrency, rate-limit regression, and full API slicing runners were refreshed with current markdown reports.
+- Full API split suite passed 24/24 expected outcomes, including the expected Prusa SLA `MODEL_OUT_OF_PRINTER_BOUNDS` fail-fast rejection for `direct/Creeper.stl`.
+
 ## v3.1.3 (2026-05-01)
 
 ### Added

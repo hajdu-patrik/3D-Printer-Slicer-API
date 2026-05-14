@@ -26,13 +26,37 @@ LEGACY_REPORT_FILES = (
     RESULTS_DIR / "admin_output_files_test_report.json",
     RESULTS_DIR / "admin_output_files_test_report.md",
 )
-from common.env_utils import resolve_admin_key_candidates, resolve_base_url
+from common.env_utils import read_dotenv, resolve_admin_key_candidates, resolve_base_url
 from common.http_utils import curl_json
 
 OUTPUT_FILES_ENDPOINT = "/admin/output-files"
 DOWNLOAD_ENDPOINT_TEMPLATE = "/admin/download/{file_name}"
 ALL_DOWNLOAD_ENDPOINT = "/admin/download/ALL"
 UNAUTHORIZED_ALLOWED = {401, 503}
+DEFAULT_MAX_ZIP_ENTRIES = 500
+DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES = 500 * 1024 * 1024
+
+
+def parse_positive_int(raw_value: str | None, default_value: int) -> int:
+    try:
+        value = int(str(raw_value))
+    except (TypeError, ValueError):
+        return default_value
+
+    return value if value > 0 else default_value
+
+
+def resolve_bulk_download_limits(project_root: Path) -> tuple[int, int]:
+    dotenv = read_dotenv(project_root)
+    max_entries = parse_positive_int(
+        os.getenv("MAX_ZIP_ENTRIES") or dotenv.get("MAX_ZIP_ENTRIES"),
+        DEFAULT_MAX_ZIP_ENTRIES,
+    )
+    max_bytes = parse_positive_int(
+        os.getenv("MAX_ZIP_UNCOMPRESSED_BYTES") or dotenv.get("MAX_ZIP_UNCOMPRESSED_BYTES"),
+        DEFAULT_MAX_ZIP_UNCOMPRESSED_BYTES,
+    )
+    return max_entries, max_bytes
 
 
 def read_admin_api_key_candidates() -> list[str]:
@@ -66,6 +90,9 @@ def write_report(*, base_url: str, success: bool, details: dict) -> None:
         f"- ALL download unauthorized status: `{details.get('all_download_unauthorized_status')}`",
         f"- ALL download authorized status: `{details.get('all_download_authorized_status')}`",
         f"- Total files: `{details.get('total_files')}`",
+        f"- Total size bytes: `{details.get('total_size_bytes')}`",
+        f"- Bulk max entries: `{details.get('max_bulk_entries')}`",
+        f"- Bulk max bytes: `{details.get('max_bulk_bytes')}`",
         f"- Download sample endpoint: `{details.get('download_sample_endpoint')}`",
     ]
     REPORT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -81,6 +108,9 @@ def build_report_details(
     all_download_authorized_status: int | None,
     total_files: int | None,
     download_sample_endpoint: str | None,
+    total_size_bytes: int | None = None,
+    max_bulk_entries: int | None = None,
+    max_bulk_bytes: int | None = None,
 ) -> dict:
     return {
         "unauthorized_status": unauthorized_status,
@@ -91,6 +121,9 @@ def build_report_details(
         "all_download_authorized_status": all_download_authorized_status,
         "total_files": total_files,
         "download_sample_endpoint": download_sample_endpoint,
+        "total_size_bytes": total_size_bytes,
+        "max_bulk_entries": max_bulk_entries,
+        "max_bulk_bytes": max_bulk_bytes,
     }
 
 
@@ -169,8 +202,13 @@ def run_all_download_authorized_check(
     api_keys: list[str],
     *,
     expected_total: int,
+    expected_total_size_bytes: int,
+    max_entries: int,
+    max_bytes: int,
 ) -> tuple[bool, int | None, str | None]:
-    expected_status = 200 if expected_total > 0 else 404
+    expected_status = 404 if expected_total <= 0 else 200
+    if expected_total > max_entries or expected_total_size_bytes > max_bytes:
+        expected_status = 413
 
     status, _body = 0, None
     for api_key in api_keys:
@@ -181,6 +219,22 @@ def run_all_download_authorized_check(
             return True, status, None
 
     return False, status, f"expected {expected_status} for authorized ALL download endpoint, got {status}"
+
+
+def calculate_total_size_bytes(body: dict | str | None) -> int:
+    if not isinstance(body, dict):
+        return 0
+
+    files = body.get("files")
+    if not isinstance(files, list):
+        return 0
+
+    total_size = 0
+    for item in files:
+        if isinstance(item, dict) and isinstance(item.get("sizeBytes"), int):
+            total_size += item["sizeBytes"]
+
+    return total_size
 
 
 def validate_authorized_payload(body: dict | str | None) -> tuple[bool, int | None, str | None, str | None]:
@@ -225,6 +279,7 @@ def validate_authorized_payload(body: dict | str | None) -> tuple[bool, int | No
 
 def main() -> int:
     base_url = resolve_base_url(PROJECT_ROOT)
+    max_bulk_entries, max_bulk_bytes = resolve_bulk_download_limits(PROJECT_ROOT)
 
     try:
         api_keys = read_admin_api_key_candidates()
@@ -360,10 +415,14 @@ def main() -> int:
         print(f"[ADMIN OUTPUT TEST] FAIL: {download_error}")
         return 1
 
+    total_size_bytes = calculate_total_size_bytes(body)
     all_download_authorized_ok, all_download_authorized_status, all_download_error = run_all_download_authorized_check(
         base_url,
         api_keys,
         expected_total=total or 0,
+        expected_total_size_bytes=total_size_bytes,
+        max_entries=max_bulk_entries,
+        max_bytes=max_bulk_bytes,
     )
     if not all_download_authorized_ok:
         write_report(
@@ -378,6 +437,9 @@ def main() -> int:
                 all_download_authorized_status=all_download_authorized_status,
                 total_files=total,
                 download_sample_endpoint=download_sample_endpoint,
+                total_size_bytes=total_size_bytes,
+                max_bulk_entries=max_bulk_entries,
+                max_bulk_bytes=max_bulk_bytes,
             ),
         )
         print(f"[ADMIN OUTPUT TEST] FAIL: {all_download_error}")
@@ -395,6 +457,9 @@ def main() -> int:
             all_download_authorized_status=all_download_authorized_status,
             total_files=total,
             download_sample_endpoint=download_sample_endpoint,
+            total_size_bytes=total_size_bytes,
+            max_bulk_entries=max_bulk_entries,
+            max_bulk_bytes=max_bulk_bytes,
         ),
     )
 

@@ -1,7 +1,6 @@
 ---
 name: best-practice
 description: Apply iterative best-practice refactors (OOP, SOLID, readability, maintainability) using the quality-architect checklist while preserving behavior.
-disable-model-invocation: true
 ---
 
 Use this skill whenever code quality, architecture, naming, or maintainability must be improved without changing public behavior.
@@ -9,7 +8,7 @@ Use this skill whenever code quality, architecture, naming, or maintainability m
 Slash entrypoint:
 - Use `/best-practice` to run the quality-focused refactor workflow.
 
-Full agent definition with the complete checklist and execution workflow is in `.claude/agents/quality-architect.md`.
+Full agent definitions with the complete checklist and execution workflow are mirrored in `.github/agents/quality-architect.md` and `.claude/agents/quality-architect.md`.
 Read that file before broad or multi-file refactors.
 
 ## Scope
@@ -17,6 +16,14 @@ Read that file before broad or multi-file refactors.
 - Improve cohesion, readability, and testability in small safe steps.
 - Reduce duplication and hidden coupling in touched areas.
 - Keep endpoint contracts, queue/rate protections, and runtime folder policy unchanged.
+
+## Decomposition Guardrails
+
+- Source files over 500 lines require a split plan before adding new responsibilities.
+- Test runners over 250 lines should be split by scenario when behavior changes require edits.
+- Service modules over 300 lines should be split by responsibility when new behavior appears.
+- Functions over 60 lines should be decomposed when extraction improves readability or testability.
+- Apply SOLID/OOP/GoF ideas only when they reduce real complexity, duplication, or coupling.
 
 ## Recommended Iteration Loop
 

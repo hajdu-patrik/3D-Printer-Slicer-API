@@ -15,6 +15,7 @@ _TESTING_SCRIPTS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_TESTING_SCRIPTS))
 
 from common.slice_matrix_runner import (
+    ExpectedFailure,
     ORCA_SLICE_ENDPOINT,
     PRUSA_SLICE_ENDPOINT,
     SliceScenario,
@@ -68,6 +69,14 @@ FULL_API_SCENARIOS = (
         legacy_report_files=(
             "full_api_prusa_sl1_test_report.json",
             "full_api_prusa_sl1_test_report.md",
+        ),
+        expected_failures=(
+            ExpectedFailure(
+                file="direct/Creeper.stl",
+                status=422,
+                error_codes=("MODEL_OUT_OF_PRINTER_BOUNDS",),
+                reason="Model exceeds the SLA profile build volume and must be rejected fail-fast.",
+            ),
         ),
     ),
 )

@@ -1,12 +1,13 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
 If rules are changed here, synchronize with:
 - CLAUDE.md
 - .github/copilot-instructions.md
+- .github/agents/* and .claude/agents/*
 - .github/skills/*
 - .claude/skills/*
 - .github/instructions/*
@@ -60,7 +61,7 @@ Admin endpoints (x-api-key required):
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 - /admin/download/:fileName enforces extension checks, path containment checks, non-symlink target checks, and realpath containment checks.
-- /admin/download/ALL returns a ZIP stream of all valid output files while preserving the same containment/symlink safety checks.
+- /admin/download/ALL returns a ZIP stream of all valid output files while preserving the same containment/symlink safety checks plus MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES limits.
 
 ## Engine Constraints
 Prusa:
@@ -80,6 +81,8 @@ Orca:
 - MAX_SLICE_QUEUE_PER_IP: 5
 - MAX_SLICE_QUEUE_WAIT_MS: 300000
 - Slice timeout: 600000 ms
+- MAX_ZIP_ENTRIES: 500
+- MAX_ZIP_UNCOMPRESSED_BYTES: 524288000
 
 Queue and rate behavior:
 - Slice/admin rate-limit responses return HTTP 429 with Retry-After and retryAfterSeconds.
@@ -145,6 +148,17 @@ Mirrored in `.claude/agents/` and `.github/agents/`:
 
 For multi-domain tasks, use the orchestrator agent workflow to plan and delegate.
 
+Workflow gates:
+- Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
+- Run quality-architect for non-trivial source changes or files near the decomposition guardrails.
+- Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
+- Run docs-sync last and update mirrored agent/skill assets when workflow policy changes.
+- Perform changelog/version/tag work only after validation is green.
+
+Optional MCP:
+- `.claude/.mcp.template.json` is a credential-free local MCP template.
+- `.claude/.mcp.json` is local-only and must not be committed.
+
 ## Testing Rule
 After running any Python test runner in tests/testing-scripts/, always read matching markdown report in tests/testing-scripts/results/.
 
@@ -174,3 +188,4 @@ Copilot instruction overlays:
 - .github/instructions/configs.instructions.md
 - .github/instructions/testing-scripts.instructions.md
 - .github/instructions/github.instructions.md
+- .claude/.mcp.template.json

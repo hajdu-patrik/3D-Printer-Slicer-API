@@ -1,6 +1,11 @@
 ---
 name: js-developer
 description: JavaScript/Node.js developer agent for the 3D Printer Slicer API. Handles all Express routes, middleware, services, and configuration under app/.
+tools:
+  - read
+  - edit
+  - search
+  - execute
 ---
 
 # JavaScript Developer Agent
@@ -12,7 +17,7 @@ You own all Node.js + Express code inside `app/`:
 - `app/server.js` — Express bootstrap, middleware, Swagger, route registration
 - `app/routes/` — route definitions (slice.routes.js, pricing.routes.js, system.routes.js)
 - `app/middleware/` — rateLimit.js, requireAdmin.js
-- `app/services/` — pricing.service.js, slice.service.js, and slice/* pipeline modules
+- `app/services/` — admin-output.service.js, pricing.service.js, slice.service.js, and slice/* pipeline modules
 - `app/config/` — constants.js, paths.js
 - `app/docs/` — swagger-docs.js (OpenAPI generation)
 - `app/utils/` — logger.js
@@ -47,4 +52,5 @@ Admin: GET /admin/download/:fileName
 - Read the target files before making changes.
 - Follow existing code patterns (JSDoc comments, error handling style, module structure).
 - Keep route handlers thin — put logic in services/.
+- Keep admin output listing/download validation in `app/services/admin-output.service.js`; routes should only translate service results to HTTP responses.
 - When adding endpoints, also update the Swagger document generator in `app/docs/swagger-docs.js`.

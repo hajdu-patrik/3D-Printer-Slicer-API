@@ -1,14 +1,16 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-05-01
+Last synchronized: 2026-05-14
 
 ## Architecture Notice
 This repository uses both GitHub Copilot and Claude as primary agentic tools.
 When architecture rules or domain constraints change in this file, keep these files synchronized:
 - .github/copilot-instructions.md
 - .claude/CLAUDE.md
+- .github/agents/* and .claude/agents/*
 - .github/skills/*
 - .claude/skills/*
+- .github/instructions/*
 
 ## Goal
 Provide a reliable slicing and pricing API for 3D printing workflows with strict safety and predictable behavior.
@@ -67,7 +69,7 @@ Admin-protected endpoints (x-api-key required):
 - Shell commands use execFile with argument arrays (no shell interpolation).
 - Upload accepts only a single file on choosenFile field with extension validation at upload time.
 - /admin/download/:fileName must pass filename extension validation (.gcode/.sl1), path containment checks, lstat non-symlink checks, and realpath containment checks.
-- /admin/download/ALL returns a ZIP stream of all valid output files and must preserve the same containment/symlink safety guarantees.
+- /admin/download/ALL returns a ZIP stream of all valid output files and must preserve the same containment/symlink safety guarantees plus MAX_ZIP_ENTRIES and MAX_ZIP_UNCOMPRESSED_BYTES limits.
 - Fail-fast geometry policy: invalid geometry returns INVALID_SOURCE_GEOMETRY.
 - No automatic model healing/correction is allowed.
 
@@ -80,6 +82,8 @@ Defaults:
 - Max queued+active slice jobs per client IP: 5
 - Max queue wait: 300000 ms
 - Slice command timeout: 600000 ms (10 minutes)
+- ZIP entry limit: 500 files
+- ZIP cumulative size limit: 500 MB
 
 Behavior:
 - Slice and admin rate limit responses return HTTP 429 with Retry-After and retryAfterSeconds.
@@ -192,6 +196,17 @@ Mirrored in `.claude/agents/` and `.github/agents/`:
 
 For multi-domain tasks (new features, endpoint changes, cross-cutting fixes), use the orchestrator agent workflow to plan and delegate.
 
+Workflow gates:
+- Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
+- Run quality-architect for non-trivial source changes or files near the decomposition guardrails.
+- Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
+- Run docs-sync last and update mirrored agent/skill assets when workflow policy changes.
+- Perform changelog/version/tag work only after validation is green.
+
+Optional MCP:
+- `.claude/.mcp.template.json` is a credential-free local MCP template.
+- `.claude/.mcp.json` is local-only and must not be committed.
+
 ## Documentation Scope Map
 - Global Copilot instructions: .github/copilot-instructions.md
 - Global Claude guidance: CLAUDE.md and .claude/CLAUDE.md
@@ -200,3 +215,4 @@ For multi-domain tasks (new features, endpoint changes, cross-cutting fixes), us
   - configs/CLAUDE.md
   - tests/testing-scripts/CLAUDE.md
 - Additional Copilot instruction packs: .github/instructions/
+- Optional Claude MCP template: .claude/.mcp.template.json

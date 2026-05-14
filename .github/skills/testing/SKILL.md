@@ -8,7 +8,7 @@ Use this skill whenever API endpoints, slicing logic, pricing, or queue concurre
 Slash entrypoint:
 - Use `/testing` to run the repository test workflow and summarize markdown report evidence.
 
-Full agent definition with scope, responsibilities, hard rules, and scope boundaries is in `.github/agents/test-engineer.md`.
+Full agent definitions with scope, responsibilities, hard rules, and scope boundaries are mirrored in `.github/agents/test-engineer.md` and `.claude/agents/test-engineer.md`.
 Read that file for complete context when writing new tests or extending existing ones.
 
 ## Quick Command Reference
@@ -25,6 +25,7 @@ Read that file for complete context when writing new tests or extending existing
 3. Isolated feature tests
    - Pricing lifecycle: `python tests/testing-scripts/pricing/pricing_cycle_test_runner.py`
    - Admin output listing: `python tests/testing-scripts/admin/admin_output_files_test_runner.py`
+   - Rate-limit regression: `python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py`
 
 4. Queue and concurrency test
    - Command: `python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3`
@@ -41,6 +42,7 @@ Read that file for complete context when writing new tests or extending existing
 
 - If admin tests fail with 401/403, verify `ADMIN_API_KEY` in .env matches the running server.
 - If slice tests fail with connection errors, verify API health endpoint before rerun.
+- If a slice matrix row returns non-2xx but is marked successful, verify the report's `Expected`, `Status`, and `ErrorCode` columns match an explicitly declared fail-fast outcome.
 
 ## Validation Checklist
 

@@ -1,6 +1,11 @@
 ---
 name: docker-specialist
 description: Docker specialist agent for the 3D Printer Slicer API. Handles Dockerfile, docker-compose files, build optimization, healthchecks, container security, and environment lifecycle (start, stop, restart, monitor, cleanup).
+tools:
+   - read
+   - edit
+   - search
+   - execute
 ---
 
 # Docker Specialist Agent

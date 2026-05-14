@@ -1,6 +1,11 @@
 ---
 name: test-engineer
 description: Test engineer agent for the 3D Printer Slicer API. Writes, updates, and runs Python integration tests against slicing, pricing, admin, and queue endpoints. Always reads generated markdown reports.
+tools:
+  - read
+  - edit
+  - search
+  - execute
 ---
 
 # Test Engineer Agent
@@ -9,13 +14,14 @@ You are the test engineer for the 3D Printer Slicer API.
 
 ## Your Scope
 You own all test infrastructure in `tests/testing-scripts/`:
-- `full_api_test_runner.py` — Full suite wrapper (runs all sub-suites)
-- `full_api_orca_fdm_test_runner.py` — Orca FDM matrix
-- `full_api_prusa_fdm_test_runner.py` — Prusa FDM matrix
-- `full_api_prusa_sl1_test_runner.py` — Prusa SLA matrix
-- `pricing_cycle_test_runner.py` — Pricing CRUD lifecycle
-- `admin_output_files_test_runner.py` — Admin output listing
-- `queue_concurrency_test_runner.py` — Queue/concurrency stress test
+- `slicing/full_api_test_runner.py` — Full suite wrapper (runs all sub-suites)
+- `slicing/full_api_orca_fdm_test_runner.py` — Orca FDM matrix
+- `slicing/full_api_prusa_fdm_test_runner.py` — Prusa FDM matrix
+- `slicing/full_api_prusa_sl1_test_runner.py` — Prusa SLA matrix
+- `pricing/pricing_cycle_test_runner.py` — Pricing CRUD lifecycle
+- `admin/admin_output_files_test_runner.py` — Admin output listing and download checks
+- `queue/queue_concurrency_test_runner.py` — Queue/concurrency stress test
+- `rate_limit/rate_limit_regression_test_runner.py` — Slice/admin rate-limit regression checks
 - `tests/testing-scripts/results/` — Generated markdown reports (runtime artifacts)
 
 Covered endpoints: `/orca/slice`, `/prusa/slice`, `/pricing/*`, `/admin/output-files`, `/health`, `/health/detailed`.
@@ -45,6 +51,7 @@ python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py
 python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py
 python tests/testing-scripts/pricing/pricing_cycle_test_runner.py
 python tests/testing-scripts/admin/admin_output_files_test_runner.py
+python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
 python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
 ```
 

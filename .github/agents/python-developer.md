@@ -16,8 +16,6 @@ You are the Python developer for the 3D Printer Slicer API.
 You own all Python scripts used in the slicing pipeline:
 - `app/cad2stl.py` — CAD format (STEP/IGES/PLY) to STL conversion
 - `app/mesh2stl.py` — OBJ/3MF to STL conversion
-- `app/img2stl.py` — Image (PNG/JPG/BMP) to STL lithophane/relief conversion
-- `app/vector2stl.py` — Vector (DXF/SVG/EPS/PDF) to STL conversion
 - `app/orient.py` — Orientation optimization before slicing
 - `app/scale_model.py` — Model scaling/transform support
 - `tests/testing-scripts/common/` — Shared test helper utilities (env_utils.py, http_utils.py, slice_matrix_runner.py)
@@ -34,8 +32,6 @@ You own all Python scripts used in the slicing pipeline:
 |---|---|---|
 | Direct 3D | .stl, .obj, .3mf | mesh2stl.py |
 | NURBS/CAD | .stp, .step, .igs, .iges, .ply | cad2stl.py |
-| Image | .png, .jpg, .jpeg, .bmp | img2stl.py |
-| Vector | .dxf, .svg, .eps, .pdf | vector2stl.py |
 
 ## What You Must NOT Do
 - Touch JavaScript/Node.js files (`app/*.js`, `app/**/*.js`) — that's the JS Developer's scope.

@@ -11,7 +11,7 @@
 ![Ubuntu Next](https://img.shields.io/badge/Next-Ubuntu_24.04-E95420?style=flat&logo=ubuntu&logoColor=white)
 ![API](https://img.shields.io/badge/API-Prusa%2FOrca_Endpoints-success?style=flat)
 
-An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts multiple 2D/3D input types into printable outputs with validated pricing.
+An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts supported 3D model and CAD inputs into printable outputs with validated pricing.
 
 Built for zero-downtime rollout, this API now supports two slicer engines through separate public endpoints.
 
@@ -19,7 +19,7 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 
 ## ✨ Core Features
 
-- 🔄 **Universal input processing:** direct 3D, CAD, vector, image, and ZIP uploads with exactly one supported source file.
+- 🔄 **Model-focused input processing:** direct 3D, CAD, and ZIP uploads with exactly one supported model source file.
 - ⚖️ **Auto-orientation:** Python-based orientation optimization before slicing.
 - 🧮 **Pricing engine:** dynamic hourly-rate calculation from persisted pricing map.
 - 🚦 **Queue + rate protection:** bounded queue and endpoint rate limiting for CPU-heavy requests.
@@ -34,8 +34,6 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 | --- | --- |
 | Direct 3D | `.stl`, `.obj`, `.3mf` |
 | NURBS / CAD | `.stp`, `.step`, `.igs`, `.iges`, `.ply` |
-| Vector | `.dxf`, `.svg`, `.eps`, `.pdf` |
-| Image | `.jpg`, `.jpeg`, `.png`, `.bmp` |
 | Archive | `.zip` |
 
 ---
@@ -136,7 +134,6 @@ Optional fields:
 - `layerHeight`
 - `material`
 - `infill` (`0`-`100`)
-- `depth`
 - `sizeUnit` (`mm` or `inch`)
 - `keepProportions` (`true`/`false`, default `true`)
 - `targetSizeX`, `targetSizeY`, `targetSizeZ` (target dimensions in selected unit)
@@ -144,8 +141,6 @@ Optional fields:
 - `rotationX`, `rotationY`, `rotationZ` (degrees)
 - `printerProfile` (profile override filename)
 - `processProfile` (Orca only process profile override filename)
-
-`depth` must be within `0 < depth <= DEFAULT_RELIEF_DEPTH_MAX_MM` (default `25mm`).
 
 ### `POST /prusa/slice`
 
@@ -297,7 +292,6 @@ curl -X POST http://localhost:3000/orca/slice \
 - `ORCA_PROFILE_INCOMPATIBLE`
 - `INVALID_SIZE_UNIT`
 - `INVALID_KEEP_PROPORTIONS`
-- `INVALID_DEPTH`
 - `INVALID_SIZE_OPTIONS`
 - `INVALID_ROTATION_OPTIONS`
 - `CONFLICTING_SIZE_OPTIONS`
@@ -519,7 +513,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
-- **Model Fidelity Policy:** Uploaded model/image/vector data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
+- **Model Fidelity Policy:** Uploaded model data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
 - **Supply-Chain Integrity:** Docker build pins and verifies SHA256 checksums for downloaded PrusaSlicer and OrcaSlicer AppImages.
 - **Python Resolver Security:** `PYTHON_EXECUTABLE` must be absolute and existing when set; fallback resolution uses `VIRTUAL_ENV` and known absolute runtime paths.
 - **Command Debugging:** `DEBUG_COMMAND_LOGS=true` enables verbose converter/slicer stdout/stderr logging.

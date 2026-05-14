@@ -3,9 +3,11 @@
 Last synchronized: 2026-05-14
 
 ## Scope
+
 This document describes the application runtime inside app/.
 
 ## Runtime Summary
+
 - HTTP stack: Express + helmet + cors + request-id middleware + global error handler.
 - Upload flow: route-level multer single-file upload on choosenFile, then option validation, queueing, conversion/orientation, transform, slicing, stats parsing, and pricing response.
 - Slicing engines: PrusaSlicer (FDM/SLA) and OrcaSlicer (FDM only).
@@ -14,6 +16,7 @@ This document describes the application runtime inside app/.
 ## Detailed JavaScript File Responsibilities
 
 ### Bootstrap and wiring
+
 - app/server.js
   - Starts the Express app, enforces mandatory ADMIN_API_KEY at startup, and initializes required directories and pricing cache.
   - Applies helmet policies (standard for API, dedicated CSP for /docs and /openapi.json).
@@ -22,6 +25,7 @@ This document describes the application runtime inside app/.
   - Registers JSON and urlencoded body limits, Swagger endpoints, business routes, 404 handler, and global error handler.
 
 ### Configuration modules
+
 - app/config/constants.js
   - Defines DEFAULTS for rate limits, queue limits, upload limits, timeouts, layer heights, and default materials.
   - Defines extension groups, Orca process-profile defaults, and default pricing matrix.
@@ -34,6 +38,7 @@ This document describes the application runtime inside app/.
   - Falls back via VIRTUAL_ENV and known absolute runtime paths.
 
 ### Middleware
+
 - app/middleware/rateLimit.js
   - Implements in-memory per-IP throttling with configurable window/limit.
   - Exposes sliceRateLimiter and adminRateLimiter.
@@ -48,6 +53,7 @@ This document describes the application runtime inside app/.
   - Keeps stable JSON error payload shape for clients.
 
 ### Routes
+
 - app/routes/slice.routes.js
   - Declares POST /prusa/slice and POST /orca/slice.
   - Applies sliceRateLimiter before multer upload.
@@ -62,6 +68,7 @@ This document describes the application runtime inside app/.
   - Delegates hardened output listing/download validation to app/services/admin-output.service.js.
 
 ### Services: top-level
+
 - app/services/pricing.service.js
   - Facade service that coordinates pricing load/save lifecycle and exposes stable pricing APIs to routes and slicer modules.
   - Delegates persistence to repository and material/domain logic to catalog modules.
@@ -80,6 +87,7 @@ This document describes the application runtime inside app/.
   - Applies extension allowlist, path containment, non-symlink target checks, realpath containment, and bulk ZIP resource limits.
 
 ### Services: slice submodules
+
 - app/services/slice/command.js
   - Runs external binaries via execFile with argument arrays.
   - Enforces SLICE_COMMAND_TIMEOUT_MS and optional DEBUG_COMMAND_LOGS output.
@@ -92,7 +100,7 @@ This document describes the application runtime inside app/.
   - Classifies pipeline failures (geometry, zip, timeout, unsupported format, Orca profile mismatch).
   - Converts exceptions to stable API error responses.
 - app/services/slice/input-processing.js
-  - Converts source inputs (CAD/image/vector/mesh) to STL via Python scripts.
+  - Converts supported model/CAD inputs to STL via Python scripts.
   - Runs orientation optimization with graceful fallback.
 - app/services/slice/model-stats.js
   - Reads model dimensions and parses slicer outputs for print-time/material stats.
@@ -100,7 +108,7 @@ This document describes the application runtime inside app/.
 - app/services/slice/number-utils.js
   - Shared positive-integer parsing helper for queue/zip settings.
 - app/services/slice/options.js
-  - Validates request fields: layerHeight, material, infill, depth, size/scale/rotation, unit, and profile overrides.
+  - Validates request fields: layerHeight, material, infill, size/scale/rotation, unit, and profile overrides.
   - Enforces engine/technology layer constraints and material-technology compatibility.
 - app/services/slice/profiles.js
   - Resolves Prusa and Orca profile selection.
@@ -121,6 +129,7 @@ This document describes the application runtime inside app/.
   - Performs ZIP guard checks (entry count, cumulative uncompressed size, path safety, encryption rejection, exact single supported source file requirement).
 
 ### Utilities and docs generation
+
 - app/utils/client-ip.js
   - Provides normalized client IP retrieval using Express trust-proxy behavior.
 - app/utils/logger.js
@@ -129,14 +138,14 @@ This document describes the application runtime inside app/.
   - Generates OpenAPI document used by /openapi.json and Swagger UI /docs.
 
 ## Python Helper Scripts in app/
+
 - app/cad2stl.py: CAD-to-STL conversion.
-- app/img2stl.py: image-to-relief STL conversion.
 - app/mesh2stl.py: mesh normalization to STL.
-- app/vector2stl.py: vector-to-relief STL conversion.
 - app/orient.py: orientation optimization for printability.
 - app/scale_model.py: scale/rotation transform execution.
 
 ## Endpoint Behavior Notes
+
 - Upload field name must stay choosenFile (multer single-file mode with extension filter).
 - /prusa/slice allows FDM and SLA based on layerHeight.
 - /orca/slice is FDM-only and profile compatibility aware.
@@ -147,7 +156,9 @@ This document describes the application runtime inside app/.
 - Unsupported routes return JSON 404 with ROUTE_NOT_FOUND.
 
 ## Endpoint and Middleware Chain Map
+
 Public endpoints:
+
 - GET /health -> handler
 - GET /pricing -> handler
 - POST /prusa/slice -> sliceRateLimiter -> multer.single(choosenFile) -> handleSlicePrusa
@@ -157,6 +168,7 @@ Public endpoints:
 - GET / -> redirect to /docs
 
 Admin-protected endpoints:
+
 - GET /health/detailed -> adminRateLimiter -> requireAdmin -> handler
 - POST /pricing/FDM -> adminRateLimiter -> requireAdmin -> handler
 - POST /pricing/SLA -> adminRateLimiter -> requireAdmin -> handler
@@ -166,6 +178,7 @@ Admin-protected endpoints:
 - GET /admin/download/:fileName -> adminRateLimiter -> requireAdmin -> handler
 
 Queue and rate status semantics:
+
 - RATE_LIMIT_EXCEEDED -> HTTP 429
 - ADMIN_RATE_LIMIT_EXCEEDED -> HTTP 429
 - SLICE_QUEUE_FULL -> HTTP 503
@@ -174,6 +187,7 @@ Queue and rate status semantics:
 - FILE_PROCESSING_TIMEOUT -> HTTP 422
 
 ## Local Rules
+
 - Keep route handlers thin; put logic in services/.
 - Keep error code vocabulary stable for clients.
 - Keep queueing and rate-limit protections active.

@@ -264,7 +264,7 @@ function createSwaggerDocument(pricing) {
                                     choosenFile: {
                                         type: 'string',
                                         format: 'binary',
-                                        description: 'The file to slice and to estimate price!'
+                                        description: 'Supported model/CAD file to slice and estimate price.'
                                     },
                                     layerHeight: {
                                         type: 'string',
@@ -360,7 +360,7 @@ function createSwaggerDocument(pricing) {
                                     choosenFile: {
                                         type: 'string',
                                         format: 'binary',
-                                        description: 'The file to slice and to estimate price!'
+                                        description: 'Supported model/CAD file to slice and estimate price.'
                                     },
                                     layerHeight: {
                                         type: 'string',

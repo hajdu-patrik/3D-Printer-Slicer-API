@@ -235,11 +235,11 @@ async function extractFirstSupportedFromZip(inputFile, filesCleanupList) {
     if (!fs.existsSync(unzipDir)) fs.mkdirSync(unzipDir);
 
     filesCleanupList.push(unzipDir);
-    const supportedExts = new Set([...EXTENSIONS.direct, ...EXTENSIONS.cad, ...EXTENSIONS.image, ...EXTENSIONS.vector]);
+    const supportedExts = new Set([...EXTENSIONS.direct, ...EXTENSIONS.cad]);
 
     const zipCandidates = await inspectZipFile(zipPath, supportedExts);
     const selectedEntry = zipCandidates[0];
-    if (!selectedEntry) throw new Error('ZIP does not contain a supported 3D/Image/Vector file.');
+    if (!selectedEntry) throw new Error('ZIP does not contain a supported model file.');
 
     const selectedName = path.basename(selectedEntry);
     const extractedPath = path.join(unzipDir, selectedName);

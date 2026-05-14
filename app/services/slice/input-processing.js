@@ -11,29 +11,12 @@ const { runCommand } = require('./command');
 /**
  * Convert supported non-STL inputs to STL for downstream slicing.
  * @param {string} processableFile Source file path.
- * @param {number} depth Relief depth for 2D-driven conversions.
  * @param {string[]} filesCleanupList Temporary file collector.
  * @returns {Promise<string>} Final STL-compatible file path.
  */
-async function convertInputToStl(processableFile, depth, filesCleanupList) {
+async function convertInputToStl(processableFile, filesCleanupList) {
     const currentExt = path.extname(processableFile).toLowerCase();
     let finalStlPath = processableFile;
-
-    if (EXTENSIONS.image.includes(currentExt)) {
-        console.log(`[INFO] Converting Image to STL (Depth: ${depth}mm)...`);
-        finalStlPath = processableFile + '.stl';
-        filesCleanupList.push(finalStlPath);
-        await runCommand(PYTHON_EXECUTABLE, ['img2stl.py', processableFile, finalStlPath, String(depth)]);
-        return finalStlPath;
-    }
-
-    if (EXTENSIONS.vector.includes(currentExt)) {
-        console.log(`[INFO] Converting Vector to STL (Depth: ${depth}mm)...`);
-        finalStlPath = processableFile + '.stl';
-        filesCleanupList.push(finalStlPath);
-        await runCommand(PYTHON_EXECUTABLE, ['vector2stl.py', processableFile, finalStlPath, String(depth)]);
-        return finalStlPath;
-    }
 
     if (['.obj', '.3mf', '.ply'].includes(currentExt)) {
         console.log('[INFO] Converting Mesh to STL...');

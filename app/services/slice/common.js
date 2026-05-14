@@ -14,8 +14,6 @@ function getSupportedInputExtensions() {
     return new Set([
         ...EXTENSIONS.direct,
         ...EXTENSIONS.cad,
-        ...EXTENSIONS.image,
-        ...EXTENSIONS.vector,
         ...EXTENSIONS.archive
     ]);
 }

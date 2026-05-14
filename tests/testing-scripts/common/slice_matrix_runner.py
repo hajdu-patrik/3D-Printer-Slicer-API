@@ -21,8 +21,6 @@ ORCA_SLICE_ENDPOINT = "/orca/slice"
 SUPPORTED_EXTENSIONS = {
     ".zip", ".stl", ".obj", ".3mf", ".ply",
     ".stp", ".step", ".igs", ".iges",
-    ".dxf", ".svg", ".eps", ".pdf",
-    ".jpg", ".jpeg", ".png", ".bmp",
 }
 
 
@@ -140,7 +138,7 @@ def discover_test_files(root: Path) -> list[Path]:
 def classify(path: Path) -> str:
     """Classify test input file by category folder."""
     parts = set(path.parts)
-    for category in ("archive", "cad", "direct", "image", "vector"):
+    for category in ("archive", "cad", "direct"):
         if category in parts:
             return category
     return "unknown"
@@ -150,10 +148,6 @@ def expected_hint_for_category(category: str) -> str:
     """Return category-level expectation hint used in reports."""
     if category in {"cad", "direct", "archive"}:
         return "expected_success"
-    if category == "image":
-        return "expected_fail_invalid_input"
-    if category == "vector":
-        return "mixed_expected_some_fail"
     return "unknown"
 
 

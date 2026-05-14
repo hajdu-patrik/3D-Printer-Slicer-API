@@ -23,6 +23,7 @@ Read that file for complete context when writing new tests or extending existing
    - Prusa SLA: `python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py`
 
 3. Isolated feature tests
+   - Unsupported upload rejection: `python tests/testing-scripts/slicing/unsupported_upload_test_runner.py`
    - Pricing lifecycle: `python tests/testing-scripts/pricing/pricing_cycle_test_runner.py`
    - Admin output listing: `python tests/testing-scripts/admin/admin_output_files_test_runner.py`
    - Rate-limit regression: `python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py`

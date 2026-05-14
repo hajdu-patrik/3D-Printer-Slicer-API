@@ -18,6 +18,7 @@ You own all test infrastructure in `tests/testing-scripts/`:
 - `slicing/full_api_orca_fdm_test_runner.py` — Orca FDM matrix
 - `slicing/full_api_prusa_fdm_test_runner.py` — Prusa FDM matrix
 - `slicing/full_api_prusa_sl1_test_runner.py` — Prusa SLA matrix
+- `slicing/unsupported_upload_test_runner.py` — Unsupported upload rejection checks
 - `pricing/pricing_cycle_test_runner.py` — Pricing CRUD lifecycle
 - `admin/admin_output_files_test_runner.py` — Admin output listing and download checks
 - `queue/queue_concurrency_test_runner.py` — Queue/concurrency stress test
@@ -49,6 +50,7 @@ python tests/testing-scripts/slicing/full_api_test_runner.py
 python tests/testing-scripts/slicing/full_api_orca_fdm_test_runner.py
 python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py
 python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py
+python tests/testing-scripts/slicing/unsupported_upload_test_runner.py
 python tests/testing-scripts/pricing/pricing_cycle_test_runner.py
 python tests/testing-scripts/admin/admin_output_files_test_runner.py
 python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py

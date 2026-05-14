@@ -49,6 +49,12 @@ const KNOWN_ERROR_RULES = Object.freeze([
         errorCode: 'UNEXPECTED_FILE_FIELD'
     },
     {
+        match: (err) => err?.code === 'UNSUPPORTED_FILE_FORMAT',
+        status: 400,
+        message: 'Unsupported file format.',
+        errorCode: 'UNSUPPORTED_FILE_FORMAT'
+    },
+    {
         match: (err) => err?.name === 'MulterError',
         status: 400,
         message: 'Invalid file upload.',

@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## v3.1.4 (2026-05-14)
 
+### Added
+
+- Added `tests/testing-scripts/slicing/unsupported_upload_test_runner.py` to verify former 2D artwork uploads are rejected with stable error codes for both direct upload and ZIP archive paths.
+- Kept `scipy` as an explicit Python dependency because stable-pose orientation for supported 3D models depends on it; this preserves post-orientation build-volume validation after removing the former broad `trimesh[easy]` dependency set.
+
+### Removed
+
+- Removed image-to-STL and vector-to-STL slicing support from the public upload pipeline.
+  - Deleted the former 2D-to-3D converter scripts and removed raster/vector extensions from upload, ZIP extraction, test discovery, Docker, and CI validation paths.
+  - Removed the conversion-specific request option and matching environment configuration because they only applied to the former 2D artwork workflow.
+  - Reason: the API is now intentionally model-focused. Accepting 2D artwork as printable geometry created a different product workflow with ambiguous geometry expectations, higher conversion dependency surface, and weaker alignment with the fail-fast model-fidelity policy. Users should upload explicit 3D/CAD source geometry instead.
+
 ### Fixed
 
 - Hardened `/admin/download/ALL` by enforcing `MAX_ZIP_ENTRIES` and `MAX_ZIP_UNCOMPRESSED_BYTES` before ZIP streaming begins.
@@ -155,7 +167,7 @@ All notable changes to this project are documented in this file.
 
 ### Request Validation
 
-- Added maximum relief-depth guard (`DEFAULT_RELIEF_DEPTH_MAX_MM`) and explicit `INVALID_DEPTH` validation response in option parsing.
+- Added a bounded validation guard for the legacy conversion option parser.
 
 ### Docker and Supply Chain
 
@@ -184,7 +196,7 @@ All notable changes to this project are documented in this file.
 
 ### Security Hardening
 
-- **Shell command injection prevention:** Replaced `child_process.exec()` with `child_process.execFile()` across all command execution paths. All Python converter calls (`img2stl.py`, `vector2stl.py`, `mesh2stl.py`, `cad2stl.py`, `orient.py`, `scale_model.py`), `prusa-slicer --info`, and slicer invocations now use argument arrays instead of string interpolation — eliminates shell injection via crafted filenames or parameters.
+- **Shell command injection prevention:** Replaced `child_process.exec()` with `child_process.execFile()` across all command execution paths. Python converter/orientation/transform calls, `prusa-slicer --info`, and slicer invocations now use argument arrays instead of string interpolation — eliminates shell injection via crafted filenames or parameters.
   - `app/services/slice/command.js` — core `runCommand()` signature changed from `(cmd: string)` to `(executable, args[])`
   - `app/services/slice/input-processing.js` — all 5 converter/orientation calls updated
   - `app/services/slice/transform.js` — `scale_model.py` call updated
@@ -274,7 +286,7 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - Added clean `requirements.txt` to root for dedicated Python runtime dependency tracking:
-  - specifically targets geometry and image processing dependencies (`trimesh`, `numpy`, `Pillow`, `shapely`, `ezdxf`, `svg.path`, `numpy-stl`)
+  - specifically targets geometry conversion dependencies used by the runtime pipeline
   - enables reliable Docker caching for the Python layer
 
 ### Changed
@@ -288,7 +300,7 @@ All notable changes to this project are documented in this file.
 - Restructured `docker-compose.yml` and `server.js` runtime paths for "Agentic" workflows:
   - redirected all intermediate conversion/extraction files to `uploads/help-files/` to maintain a clean root `uploads/` directory
   - implemented strict cleanup logic ensuring `help-files/` is emptied immediately after slicing
-- Cleaned up Python scripts (`img2stl.py`, `vector2stl.py`) for SonarLint and Pylance compliance:
+- Cleaned up legacy converter scripts for SonarLint and Pylance compliance:
   - removed unused variables and implicit imports
   - tightened exception handling with specific classes (e.g., `ValueError`)
 
@@ -673,7 +685,7 @@ All notable changes to this project are documented in this file.
 ### Milestone (v0.9.2)
 
 - Added `.zip` input support (first valid supported file in archive is processed).
-- Continued work on `.igs/.iges`, vector, and image input handling.
+- Continued work on `.igs/.iges` and archive input handling.
 - Tag message: `v0.9.2 milestone`.
 
 ## v0.9.1 (2026-02-17)

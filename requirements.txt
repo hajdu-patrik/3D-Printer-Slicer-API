@@ -1,8 +1,7 @@
-trimesh[easy]
+trimesh
 numpy
-Pillow
-shapely
-ezdxf
-svg.path
 numpy-stl
+scipy
+lxml
+networkx
 gmsh

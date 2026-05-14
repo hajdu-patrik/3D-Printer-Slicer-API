@@ -39,8 +39,6 @@ ORCA_SLICE_ENDPOINT = "/orca/slice"
 SUPPORTED_EXTENSIONS = {
     ".zip", ".stl", ".obj", ".3mf", ".ply",
     ".stp", ".step", ".igs", ".iges",
-    ".dxf", ".svg", ".eps", ".pdf",
-    ".jpg", ".jpeg", ".png", ".bmp"
 }
 
 def resolve_runtime_env() -> tuple[str, str | None]:
@@ -110,11 +108,6 @@ def discover_queue_candidate_files(root: Path) -> list[Path]:
     all_files = discover_supported_files(root)
 
     deny_names = {
-        "Akkor.jpg",
-        "Bone.eps",
-        "Lamp.pdf",
-        "PS5.svg",
-        "Window.dxf",
         "Screw.igs",
         "Thrower.stp",
     }
@@ -140,8 +133,6 @@ def discover_queue_candidate_files(root: Path) -> list[Path]:
         if path in seen:
             continue
         if path.name in deny_names:
-            continue
-        if "image" in path.parts or "vector" in path.parts:
             continue
         chosen.append(path)
         seen.add(path)

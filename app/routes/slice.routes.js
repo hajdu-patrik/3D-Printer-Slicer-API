@@ -15,8 +15,6 @@ const router = express.Router();
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
     ...EXTENSIONS.direct,
     ...EXTENSIONS.cad,
-    ...EXTENSIONS.image,
-    ...EXTENSIONS.vector,
     ...EXTENSIONS.archive
 ]);
 
@@ -30,7 +28,7 @@ function resolveMaxUploadBytes() {
 }
 
 /**
- * Multer upload middleware used for model and image input files.
+ * Multer upload middleware used for model input files.
  * Restricted to single file on 'choosenFile' field with extension validation.
  */
 const upload = multer({
@@ -45,6 +43,7 @@ const upload = multer({
         }
         const err = new Error('Unsupported file format.');
         err.status = 400;
+        err.code = 'UNSUPPORTED_FILE_FORMAT';
         return cb(err);
     }
 });

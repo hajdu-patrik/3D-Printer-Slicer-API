@@ -15,27 +15,17 @@ function isSourceGeometryError(err) {
     const combined = `${err?.message || ''}\n${err?.stderr || ''}`.toLowerCase();
 
     const failedConverter = (
-        combined.includes('vector2stl.py') ||
         combined.includes('cad2stl.py') ||
-        combined.includes('mesh2stl.py') ||
-        combined.includes('img2stl.py')
+        combined.includes('mesh2stl.py')
     );
 
     const geometryHints = [
         'critical error',
-        'no 2d geometry found',
-        'no closed 2d geometry',
         'invalid polygon geometry',
         'could not create any geometry',
         'scene is empty',
         'mesh generation failed',
         'conversion failed',
-        'cannot identify image file',
-        'failed to load path geometry',
-        'no 2d geometry found',
-        'could not be parsed into closed shapes',
-        'contains open curves/paths',
-        'contains invalid shapes',
         'not supported or is corrupted',
         'impossible to mesh periodic surface',
         'invalid file'
@@ -123,7 +113,7 @@ function handleProcessingError(err, res, filesCleanupList, inputFile, getSupport
     if (isSourceGeometryError(err)) {
         return res.status(400).json({
             success: false,
-            error: 'Uploaded model/image/vector contains invalid or non-printable source data. Automatic repair is disabled to preserve exact model fidelity. Please upload a corrected source file.',
+            error: 'Uploaded model contains invalid or non-printable source data. Automatic repair is disabled to preserve exact model fidelity. Please upload a corrected model file.',
             errorCode: 'INVALID_SOURCE_GEOMETRY'
         });
     }
@@ -131,7 +121,7 @@ function handleProcessingError(err, res, filesCleanupList, inputFile, getSupport
     if (isZipInputError(err)) {
         return res.status(400).json({
             success: false,
-            error: 'Uploaded ZIP file is invalid or does not contain a supported model/image/vector file.',
+            error: 'Uploaded ZIP file is invalid or does not contain a supported model file.',
             errorCode: 'INVALID_SOURCE_ARCHIVE'
         });
     }

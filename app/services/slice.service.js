@@ -93,18 +93,17 @@ function appendOriginalExtensionToUpload(inputFile, originalExt, filesCleanupLis
 /**
  * Execute input preprocessing pipeline until a slicer-ready file is available.
  * @param {string} inputFile Input file path with original extension.
- * @param {number} depth Requested conversion depth.
  * @param {'FDM'|'SLA'} technology Requested technology.
  * @param {string[]} filesCleanupList Cleanup collector.
  * @returns {Promise<{processableFile: string, originalModelInfo: {x: number, y: number, z: number, height_mm: number}}>} Preprocessing result.
  */
-async function prepareProcessableModel(inputFile, depth, technology, filesCleanupList) {
+async function prepareProcessableModel(inputFile, technology, filesCleanupList) {
     let processableFile = inputFile;
     if (path.extname(processableFile).toLowerCase() === '.zip') {
         processableFile = await extractFirstSupportedFromZip(inputFile, filesCleanupList);
     }
 
-    processableFile = await convertInputToStl(processableFile, depth, filesCleanupList);
+    processableFile = await convertInputToStl(processableFile, filesCleanupList);
     processableFile = await tryOptimizeOrientation(processableFile, technology, filesCleanupList);
 
     const originalModelInfo = await getModelInfo(processableFile);
@@ -118,7 +117,6 @@ async function prepareProcessableModel(inputFile, depth, technology, filesCleanu
  * @typedef {{
  * layerHeight: number,
  * material: string,
- * depth: number,
  * infillPercentage: string,
  * technology: 'FDM'|'SLA',
  * transformOptions: {unit: 'mm'|'inch', keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, targetSizeMm: {x: number | null, y: number | null, z: number | null}, scalePercent: number | null, rotationDeg: {x: number, y: number, z: number}},
@@ -361,7 +359,6 @@ async function processSlice(req, res, options = {}) {
     const {
         layerHeight,
         material,
-        depth,
         infillPercentage,
         technology,
         transformOptions,
@@ -375,7 +372,6 @@ async function processSlice(req, res, options = {}) {
 
         let { processableFile, originalModelInfo } = await prepareProcessableModel(
             inputFile,
-            depth,
             technology,
             filesCleanupList
         );

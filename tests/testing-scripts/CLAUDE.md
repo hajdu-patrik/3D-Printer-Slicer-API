@@ -13,6 +13,7 @@ This folder contains API-level Python integration and workflow tests.
   - slicing/full_api_orca_fdm_test_runner.py
   - slicing/full_api_prusa_fdm_test_runner.py
   - slicing/full_api_prusa_sl1_test_runner.py
+  - slicing/unsupported_upload_test_runner.py
 
 - `admin/` — Admin endpoint validations
   - admin/admin_output_files_test_runner.py

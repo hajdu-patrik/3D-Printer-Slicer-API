@@ -138,7 +138,6 @@ Core keys from .env:
 - MAX_ZIP_ENTRIES
 - MAX_ZIP_UNCOMPRESSED_BYTES
 - SLICE_COMMAND_TIMEOUT_MS
-- DEFAULT_RELIEF_DEPTH_MAX_MM
 - DEBUG_COMMAND_LOGS
 - PYTHON_EXECUTABLE
 - VIRTUAL_ENV
@@ -161,6 +160,7 @@ Focused suites:
 - python tests/testing-scripts/slicing/full_api_orca_fdm_test_runner.py
 - python tests/testing-scripts/slicing/full_api_prusa_fdm_test_runner.py
 - python tests/testing-scripts/slicing/full_api_prusa_sl1_test_runner.py
+- python tests/testing-scripts/slicing/unsupported_upload_test_runner.py
 - python tests/testing-scripts/pricing/pricing_cycle_test_runner.py
 - python tests/testing-scripts/admin/admin_output_files_test_runner.py
 - python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py

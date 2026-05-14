@@ -27,8 +27,6 @@ output/
 input/archive/
 input/cad/
 input/direct/
-input/image/
-input/vector/
 logs/
 
 # Documentation and non-runtime assets

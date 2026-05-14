@@ -117,7 +117,6 @@ Queue and rate behavior:
 - MAX_ZIP_ENTRIES
 - MAX_ZIP_UNCOMPRESSED_BYTES
 - SLICE_COMMAND_TIMEOUT_MS
-- DEFAULT_RELIEF_DEPTH_MAX_MM
 - DEBUG_COMMAND_LOGS
 - PYTHON_EXECUTABLE
 - VIRTUAL_ENV
@@ -163,6 +162,7 @@ Optional MCP:
 After running any Python test runner in tests/testing-scripts/, always read matching markdown report in tests/testing-scripts/results/.
 
 Focused test runners:
+- tests/testing-scripts/slicing/unsupported_upload_test_runner.py
 - tests/testing-scripts/admin/admin_output_files_test_runner.py
 - tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
 

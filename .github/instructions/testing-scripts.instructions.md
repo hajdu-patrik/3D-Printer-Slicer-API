@@ -11,6 +11,7 @@ Last synchronized: 2026-05-14
 - slicing/full_api_orca_fdm_test_runner.py
 - slicing/full_api_prusa_fdm_test_runner.py
 - slicing/full_api_prusa_sl1_test_runner.py
+- slicing/unsupported_upload_test_runner.py
 - admin/admin_output_files_test_runner.py
 - pricing/pricing_cycle_test_runner.py
 - rate_limit/rate_limit_regression_test_runner.py

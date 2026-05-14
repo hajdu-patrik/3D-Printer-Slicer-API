@@ -97,7 +97,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg python3 \
         libglu1-mesa libgtk-3-0 libegl1 libwebkit2gtk-4.1-0 \
-        libosmesa6 libxft2 libxinerama1 libgeos-c1t64 pstoedit ghostscript \
+        libgomp1 libosmesa6 libxft2 libxinerama1 \
     && mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \

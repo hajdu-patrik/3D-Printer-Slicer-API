@@ -10,7 +10,6 @@ const {
 } = require('../pricing.service');
 const {
     pickFirstNonEmptyValue,
-    parseNumberLike,
     parseOptionalPositiveField,
     parseOptionalFiniteField,
     parseBooleanLike,
@@ -18,11 +17,6 @@ const {
     normalizeAxisDimensions,
     sanitizeProfileFileName
 } = require('./value-parsers');
-
-const MAX_RELIEF_DEPTH_MM = (() => {
-    const parsed = parseNumberLike(process.env.DEFAULT_RELIEF_DEPTH_MAX_MM);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULTS.DEFAULT_RELIEF_DEPTH_MAX_MM;
-})();
 
 /**
  * Parse and validate layer-height numeric value.
@@ -341,7 +335,7 @@ function parseTransformOptions(body) {
  * @param {Record<string, unknown>} body Request payload.
  * @param {'FDM'|'SLA'|null} forcedTechnology Endpoint-forced technology.
  * @param {'prusa'|'orca'} [engine='prusa'] Slicer engine key.
- * @returns {{isValid: true, options: {layerHeight: number, material: string, depth: number, infillPercentage: string, technology: 'FDM'|'SLA', transformOptions: {unit: 'mm'|'inch', keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, targetSizeMm: {x: number | null, y: number | null, z: number | null}, scalePercent: number | null, rotationDeg: {x: number, y: number, z: number}}, profileOverrides: {prusaProfile: string | null, orcaMachineProfile: string | null, orcaProcessProfile: string | null}}} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
+ * @returns {{isValid: true, options: {layerHeight: number, material: string, infillPercentage: string, technology: 'FDM'|'SLA', transformOptions: {unit: 'mm'|'inch', keepProportions: boolean, requestedTargetSize: {x: number | null, y: number | null, z: number | null}, targetSizeMm: {x: number | null, y: number | null, z: number | null}, scalePercent: number | null, rotationDeg: {x: number, y: number, z: number}}, profileOverrides: {prusaProfile: string | null, orcaMachineProfile: string | null, orcaProcessProfile: string | null}}} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
  */
 function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
     const input = body || {};
@@ -356,27 +350,6 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
                 errorCode: 'INVALID_LAYER_HEIGHT'
             }
         };
-    }
-
-    const depthInput = input.depth;
-    let depth = DEFAULTS.DEFAULT_RELIEF_DEPTH_MM;
-    const hasDepthInput = depthInput !== undefined
-        && depthInput !== null
-        && !(typeof depthInput === 'string' && depthInput.trim() === '');
-    if (hasDepthInput) {
-        const parsedDepth = parseNumberLike(depthInput);
-        if (!Number.isFinite(parsedDepth) || parsedDepth <= 0 || parsedDepth > MAX_RELIEF_DEPTH_MM) {
-            return {
-                isValid: false,
-                response: {
-                    success: false,
-                    error: `Invalid depth value. Allowed range: 0 < depth <= ${MAX_RELIEF_DEPTH_MM} mm.`,
-                    errorCode: 'INVALID_DEPTH'
-                }
-            };
-        }
-
-        depth = parsedDepth;
     }
 
     let infillRaw = Number.parseInt(input.infill, 10);
@@ -428,7 +401,6 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
         options: {
             layerHeight,
             material,
-            depth,
             infillPercentage,
             technology,
             transformOptions: transformOptionsResult.options,

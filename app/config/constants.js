@@ -26,8 +26,6 @@ const DEFAULTS = {
     MAX_ZIP_UNCOMPRESSED_BYTES: 500 * 1024 * 1024,
     DEFAULT_LAYER_HEIGHT: 0.2,
     DEFAULT_INFIL_PERCENT: 20,
-    DEFAULT_RELIEF_DEPTH_MM: 2,
-    DEFAULT_RELIEF_DEPTH_MAX_MM: 25,
     DEFAULT_FDM_MATERIAL: 'PLA',
     DEFAULT_SLA_MATERIAL: 'Standard',
     SLA_MIN_LAYER_HEIGHT_MM: 0.025,
@@ -88,13 +86,11 @@ const MIN_BUILD_VOLUMES = {
 
 /**
  * Accepted file extensions grouped by processing pipeline.
- * @type {{direct: string[], cad: string[], image: string[], vector: string[], archive: string[]}}
+ * @type {{direct: string[], cad: string[], archive: string[]}}
  */
 const EXTENSIONS = {
     direct: ['.stl', '.obj', '.3mf'],
     cad: ['.stp', '.step', '.igs', '.iges', '.ply'],
-    image: ['.png', '.jpg', '.jpeg', '.bmp'],
-    vector: ['.dxf', '.svg', '.eps', '.pdf'],
     archive: ['.zip']
 };
 

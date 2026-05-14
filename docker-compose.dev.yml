@@ -5,10 +5,8 @@ services:
       # --- Full app source in sync (JS + PY) ---
       - ./app/server.js:/app/server.js
       - ./app/cad2stl.py:/app/cad2stl.py
-      - ./app/img2stl.py:/app/img2stl.py
       - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/orient.py:/app/orient.py
-      - ./app/vector2stl.py:/app/vector2stl.py
       - ./app/config:/app/config
       - ./app/docs:/app/docs
       - ./app/middleware:/app/middleware

@@ -179,7 +179,7 @@ app.use(sliceRoutes);
 app.use(systemRoutes);
 
 // Catch-all for unknown routes
-app.all('*', (req, res) => {
+app.all('/*splat', (req, res) => {
     console.warn(`[ROUTING] Unknown or invalid request: ${req.method} ${req.originalUrl}`);
     return res.status(404).json({
         success: false,

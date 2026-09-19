@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Dependencies
+
+- Updated npm dependencies within their existing declared version ranges: `helmet` 8.1.0 -> 8.3.0, `multer` 2.1.1 -> 2.4.0, `yauzl` 3.3.0 -> 3.4.0. `cors` and `swagger-ui-express` were already at the newest version permitted by their existing ranges; only `package-lock.json` resolutions moved for those.
+- Upgraded `express` 4.22.3 -> 5.2.1 (major). The only code change required was in `app/server.js`: the catch-all unknown-route handler `app.all('*', ...)` became `app.all('/*splat', ...)`, because Express 5's path-to-regexp v8 rejects a bare unnamed wildcard at route-registration time. Every other documented Express 5 breaking change was checked against this codebase and does not apply here: `req.query` is only ever read, never assigned; `req.body` is always defined because `express.json()`/`express.urlencoded()` are registered globally ahead of every route; `req.param()`, `app.del()`, legacy `res.sendfile()`, `res.redirect('back')`, and the removed two-argument/status-only forms of `res.send()`/`res.json()` are not used anywhere; `express.static()` is not used; every route parameter is a plain named `:param` (no optional `?` params); and the global error-handling middleware in `app/middleware/errorHandler.js` matches errors structurally rather than depending on Express-version-specific behavior. `multer` declares no `express` peer dependency; `swagger-ui-express` declares `peerDependencies.express: ">=4.0.0 || >=5.0.0-beta"`, explicitly admitting Express 5; `helmet` and `cors` are framework-agnostic and unaffected by the Express major.
+- Upgraded `dotenv` 17.3.1 -> 18.0.1 (major). Evaluated against the documented v18 breaking changes: the new CLI, `.env.vault` support removal, and preload-flag removal are all unused by this app (only `require('dotenv').config()` with no arguments is called, in `app/server.js`); the fast-parser opt-in (`{ fast: true }`) is not enabled; default option values (`override`, `quiet`, `debug`, `encoding`, `path`) and parsing rules (quoting, backticks, multiline double-quoted values, `#` comments, no implicit variable expansion) are unchanged between 17.4.2 and 18.0.1. The one observed behavior change: the informational startup line (`injected env (N) from .env`) moved from stdout to stderr and dropped its rotating promotional tip suffix - confirmed harmless because nothing in this codebase parses its own stdout/stderr, and the reported variable count was identical (13) before and after.
+- Evaluated `archiver` 7.0.1 -> 8.0.0 (major) and held it back: `archiver@8.0.0` declares `"type": "module"` with a single `"./index.js"` export and no `require` condition, i.e. it is ESM-only, while `app/routes/system.routes.js` loads it via `const archiver = require('archiver')` and `package.json` declares no `"type": "module"` (this is a CommonJS project). `require()` of an ESM-only package only works starting Node 22.12 (`require(esm)`); the pinned production runtime is Node 20, so archiver 8 would crash the container at boot with `ERR_REQUIRE_ESM` despite passing a boot smoke on this machine's newer local Node. Kept at `^7.0.1`.
+- `npm audit --omit=dev`: 4 advisories before this update (1 low, 1 moderate, 2 high, all `fixAvailable` via the in-range/major bumps above) now report 0.
+
+### Validation
+
+- Verified every adopted dependency's `engines.node` admits Node 20 (the pinned production runtime), plus a full recursive `node_modules/**/package.json` scan (108 packages declaring `engines.node`, all admitting `20.20.2`) using npm's own bundled `semver` module.
+- Verified `node --check` on every `app/**/*.js` file (32 files) and a clean `npm ci --omit=dev --ignore-scripts` install matching the Dockerfile's install step.
+- Verified the Express 5 upgrade with a local boot smoke (no Docker): booted the API on a loopback port before and after the upgrade and compared `GET /health`, `GET /docs`, `GET /openapi.json`, `GET /pricing`, an unknown route, `GET`/`PATCH`/`DELETE` against every parameterized and admin-protected route without credentials, a CORS preflight `OPTIONS` request, and a malformed-JSON request body — all thirteen probes returned identical status codes and response bodies before and after, with no deprecation warnings or errors in server output. Repeated the identical thirteen-probe boot smoke for the `dotenv` 18 upgrade (stdout and stderr captured separately this time) with the same result: byte-for-byte identical status codes and bodies, and the only stdout/stderr difference was the expected relocated startup line described above.
+- Scanned the final installed tree for ESM-only packages that a `require()` on the boot path would fail to load under Node 20: exactly 5 (`ansi-regex@6.3.0`, `ansi-styles@6.2.3`, `string-width@5.1.2`, `strip-ansi@7.2.0`, `wrap-ansi@8.1.0`), all already present with the same identity in the pre-upgrade lockfile (transitive siblings of `archiver@7`'s own dependency chain that ship pre-built CommonJS-safe `*-cjs` aliases for anything that actually `require()`s them) - no new ESM-only package was introduced by this update.
+
+### Documentation
+
+- Updated the README Express badge from `4.18.2` to `5.2.1` to match the upgraded dependency.
+
+### Notes
+
+- `package.json` version was intentionally left at `3.1.4`. Every prior version bump in this project's history (`v2.0.0` through `v3.1.4`) accompanied a feature, security, or behavioral change; dependency bumps have only ever shipped bundled inside one of those releases (e.g. the `multer` advisory fix in `v3.0.3` shipped alongside the new `/health/detailed` endpoint), never on their own. This update contains no endpoint, behavior, or configuration change, so it does not get its own version number.
+
 ## v3.1.4 (2026-05-14)
 
 ### Added

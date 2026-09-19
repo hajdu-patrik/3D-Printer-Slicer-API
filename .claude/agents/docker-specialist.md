@@ -28,7 +28,7 @@ You own all container infrastructure files:
   - `slicer-api` — Main API (port 3000), always runs
   - `uptime-kuma` — Monitoring (port 3001), `monitoring` profile only
 - **Runtime user:** `slicer` (non-root, created with `--system`)
-- **Node.js:** 20.x from NodeSource
+- **Node.js:** 24.x from NodeSource
 - **Python:** 3.12 (system python3 + venv at /opt/venv)
 - **Slicer paths:** /opt/prusaslicer, /opt/orcaslicer (symlinked to /usr/local/bin/)
 

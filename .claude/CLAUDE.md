@@ -1,16 +1,15 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-05-14
+Last synchronized: 2026-09-22
 
 ## Architecture Notice
-This repository uses both GitHub Copilot and Claude as primary agentic tools.
+Claude is the primary agentic tool for this repository. Guidance lives in Markdown guides only;
+agent definitions, skill packs, and Copilot instruction overlays were retired.
 If rules are changed here, synchronize with:
 - CLAUDE.md
-- .github/copilot-instructions.md
-- .github/agents/* and .claude/agents/*
-- .github/skills/*
-- .claude/skills/*
-- .github/instructions/*
+- app/CLAUDE.md
+- configs/CLAUDE.md
+- tests/testing-scripts/CLAUDE.md
 
 ## Goal
 Keep slicing behavior safe, deterministic, and production-friendly while preserving strict domain constraints.
@@ -128,35 +127,16 @@ Queue and rate behavior:
 - TRUST_PROXY_CIDRS
 - SLICER_BASE_URL
 
-## Skill Packs
-Claude skills (operational playbooks mapped to agent definitions):
-- .claude/skills/docker-ops/SKILL.md
-- .claude/skills/testing/SKILL.md
-- .claude/skills/docs-sync/SKILL.md
-- .claude/skills/best-practice/SKILL.md
-
-## Agent Definitions
-Mirrored in `.claude/agents/` and `.github/agents/`:
-- orchestrator — plans multi-domain tasks and delegates to sub-agents in parallel
-- js-developer — Node.js + Express code in app/
-- python-developer — Python converters, orientation, scaling scripts
-- test-engineer — Python integration test runners and reports
-- docs-syncer — documentation and instruction file synchronization
-- docker-specialist — Dockerfile, docker-compose, container lifecycle
-- quality-architect — iterative OOP/SOLID/design-principles refactor workflow with 23-point checklist
-
-For multi-domain tasks, use the orchestrator agent workflow to plan and delegate.
-
-Workflow gates:
+## Workflow Gates
 - Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
-- Run quality-architect for non-trivial source changes or files near the decomposition guardrails.
+- Review non-trivial source changes against OOP/SOLID and the decomposition guardrails before running integration suites.
 - Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
-- Run docs-sync last and update mirrored agent/skill assets when workflow policy changes.
+- Update the Markdown guides last, keeping every file in the Documentation Topology consistent.
 - Perform changelog/version/tag work only after validation is green.
 
-Optional MCP:
-- `.claude/.mcp.template.json` is a credential-free local MCP template.
+## Local-Only Files
 - `.claude/.mcp.json` is local-only and must not be committed.
+- `.env` holds runtime secrets and stays untracked; `.env.example` documents the keys.
 
 ## Testing Rule
 After running any Python test runner in tests/testing-scripts/, always read matching markdown report in tests/testing-scripts/results/.
@@ -176,17 +156,16 @@ Test organization:
 Global:
 - CLAUDE.md
 - .claude/CLAUDE.md
-- .github/copilot-instructions.md
 
 Folder-local:
 - app/CLAUDE.md
 - configs/CLAUDE.md
 - tests/testing-scripts/CLAUDE.md
 
-Copilot instruction overlays:
-- .github/instructions/repository.instructions.md
-- .github/instructions/app.instructions.md
-- .github/instructions/configs.instructions.md
-- .github/instructions/testing-scripts.instructions.md
-- .github/instructions/github.instructions.md
-- .claude/.mcp.template.json
+Public docs:
+- README.md
+- tests/README.md
+
+## CI/CD
+- `.github/workflows/deploy.yml` is the only `.github` asset kept: syntax validation on push to `main`, then SSH deploy to the VPS with a `/health` check.
+- Keep the workflow deterministic and minimal; secrets stay in GitHub repository settings.

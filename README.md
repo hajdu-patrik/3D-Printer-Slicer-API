@@ -531,7 +531,7 @@ This repository currently includes the following synchronized changes across imp
 - **Admin output download hardening:** extension allowlist (`.gcode`, `.sl1`), `ALL` ZIP bulk download support, path/symlink/realpath checks, and pre-stream bulk ZIP resource limits.
 - **Python subprocess execution hardening:** centralized Python executable resolution, absolute-path validation, startup fail-fast behavior, and secure converter/orientation/transform subprocess execution.
 - **Docker supply-chain validation:** build-time SHA256 verification for slicer AppImages.
-- **Documentation synchronization:** global guides, folder-local guides, and instruction overlays under `.github/instructions/*`.
+- **Documentation synchronization:** global Claude guides (`CLAUDE.md`, `.claude/CLAUDE.md`) and folder-local guides under `app/`, `configs/`, and `tests/testing-scripts/`.
 
 ---
 

@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Removed
+
+- Retired the dual-tool agentic asset set. Deleted `.github/agents/*` (7 agent definitions), `.github/skills/*` (4 skill packs), `.github/instructions/*` (5 Copilot instruction overlays), `.github/copilot-instructions.md`, `.claude/agents/*` (7 mirrored agent definitions), `.claude/skills/*` (4 mirrored skill packs), and `.claude/.mcp.template.json`. `.github/workflows/deploy.yml` is the only remaining `.github` asset, so CI/CD is unaffected: the workflow file itself, its triggers, its validation steps, and its deploy script are untouched.
+- The mirrored-asset maintenance burden goes with them: guidance now lives only in the Markdown guides (`CLAUDE.md`, `.claude/CLAUDE.md`, `app/CLAUDE.md`, `configs/CLAUDE.md`, `tests/testing-scripts/CLAUDE.md`) plus the public `README.md` / `tests/README.md`.
+
+### Documentation
+
+- Rewrote the sections in `CLAUDE.md` and `.claude/CLAUDE.md` that referenced the removed assets: the Architecture Notice now lists only the Markdown guides as sync targets, the Skill Routing / Skill Packs and Agent Definitions sections are replaced by a standalone `Workflow Gates` section (same gates, phrased without agent delegation), the MCP template note became a `Local-Only Files` section, and both files gained a `CI/CD` section describing `.github/workflows/deploy.yml` as the only retained `.github` asset.
+- Updated the documentation-synchronization bullet in `README.md`, which pointed at `.github/instructions/*`.
+- Verified no file outside `CHANGELOG.md` history still references a deleted path or agent name.
+
+### Notes
+
+- No source file, test runner, dependency, or configuration key changed, so `package.json` stays at `3.1.5`.
+
 ## v3.1.5 (2026-09-22)
 
 ### Dependencies

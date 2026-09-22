@@ -28,7 +28,13 @@ function isSourceGeometryError(err) {
         'conversion failed',
         'not supported or is corrupted',
         'impossible to mesh periodic surface',
-        'invalid file'
+        'invalid file',
+        'could not read file',
+        'is not a valid cad file',
+        'could not convert this cad file',
+        'invalid mesh file',
+        'does not contain mesh geometry',
+        'could not convert this mesh file'
     ];
 
     return failedConverter && geometryHints.some((hint) => combined.includes(hint));

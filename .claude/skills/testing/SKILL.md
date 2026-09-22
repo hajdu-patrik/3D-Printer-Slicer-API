@@ -24,6 +24,7 @@ Read that file for complete context when writing new tests or extending existing
 
 3. Isolated feature tests
    - Unsupported upload rejection: `python tests/testing-scripts/slicing/unsupported_upload_test_runner.py`
+   - Invalid source geometry fail-fast: `python tests/testing-scripts/slicing/invalid_geometry_test_runner.py`
    - Pricing lifecycle: `python tests/testing-scripts/pricing/pricing_cycle_test_runner.py`
    - Admin output listing: `python tests/testing-scripts/admin/admin_output_files_test_runner.py`
    - Rate-limit regression: `python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py`

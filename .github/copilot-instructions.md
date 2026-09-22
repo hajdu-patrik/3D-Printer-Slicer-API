@@ -141,6 +141,7 @@ After every test run, read the generated markdown report under tests/testing-scr
 
 Focused test runners:
 - tests/testing-scripts/slicing/unsupported_upload_test_runner.py
+- tests/testing-scripts/slicing/invalid_geometry_test_runner.py
 - tests/testing-scripts/admin/admin_output_files_test_runner.py
 - tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
 

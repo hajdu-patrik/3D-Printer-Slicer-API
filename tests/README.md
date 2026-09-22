@@ -83,6 +83,20 @@ What it does:
 - Verifies removed 2D artwork upload paths are rejected.
 - Checks stable error codes for direct unsupported upload and ZIP archive rejection.
 
+---
+
+### Invalid Source Geometry Rejection
+
+```bash
+python tests/testing-scripts/slicing/invalid_geometry_test_runner.py
+```
+
+What it does:
+
+- Uploads corrupted STEP, OBJ, 3MF, and PLY files and expects `400` / `INVALID_SOURCE_GEOMETRY`.
+- Uploads an empty STL and expects `422` / `MODEL_DIMENSIONS_UNAVAILABLE`.
+- Confirms fail-fast handling: corrupted user input never surfaces as a generic server error and is never auto-repaired.
+
 ### Pricing Lifecycle
 
 ```bash

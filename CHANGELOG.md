@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## v3.1.5 (2026-09-22)
 
 ### Dependencies
 
@@ -49,13 +49,13 @@ All notable changes to this project are documented in this file.
 
 - Updated the README Express badge from `4.18.2` to `5.2.1` to match the upgraded dependency.
 - Updated the README Node.js badge from `20.20.2` to `24.21.0` to match the new runtime, using the exact version the built image reports via `node -v`.
+- Bumped package and OpenAPI metadata from `3.1.4` to `3.1.5` (`package.json`, `package-lock.json`, `app/docs/swagger-docs.js`); `GET /openapi.json` and the Swagger UI header now report `3.1.5`.
 - Registered the new invalid-geometry runner across the mirrored documentation set (`CLAUDE.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`, `.github/instructions/testing-scripts.instructions.md`, `tests/testing-scripts/CLAUDE.md`, `tests/README.md`, both `test-engineer` agent definitions, and both `testing` skill packs).
 
 ### Notes
 
-- `package.json` version was intentionally left at `3.1.4`. Every prior version bump in this project's history (`v2.0.0` through `v3.1.4`) accompanied a feature, security, or behavioral change; dependency bumps have only ever shipped bundled inside one of those releases (e.g. the `multer` advisory fix in `v3.0.3` shipped alongside the new `/health/detailed` endpoint), never on their own. This update contains no endpoint, behavior, or configuration change, so it does not get its own version number.
-- The Node 24 runtime move and the accompanying CI/Docker verification described above are included in this same unreleased, unversioned update for the same reason: verified byte-for-byte identical API behavior, not a feature or behavior change.
-- The geometry error-classification fix above **is** a client-visible behavior change (`500` -> `400` for corrupted uploads), so the "no behavior change" reasoning in the two preceding notes covers only the dependency and runtime work, not this fix. Whether it warrants a patch version bump is left to the release decision.
+- The dependency updates and the Node 24 runtime move in this release carry no behavior change of their own: both were verified to produce byte-for-byte identical API responses. They ship here bundled with the release rather than as a standalone version bump, matching every prior version in this project's history (`v2.0.0` through `v3.1.4`), where dependency work always shipped inside a feature, security, or behavioral release.
+- The geometry error-classification fix **is** a client-visible behavior change (`500` / `INTERNAL_PROCESSING_ERROR` -> `400` / `INVALID_SOURCE_GEOMETRY` for corrupted uploads), and it is what makes this a versioned patch release. Clients that treated a corrupted upload as a retryable server error must now treat it as a permanent client error; no successful-slice response shape changed.
 
 ## v3.1.4 (2026-05-14)
 

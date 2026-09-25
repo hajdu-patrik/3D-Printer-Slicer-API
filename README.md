@@ -10,7 +10,7 @@
 ![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Ubuntu Next](https://img.shields.io/badge/Next-Ubuntu_24.04-E95420?style=flat&logo=ubuntu&logoColor=white)
 ![API](https://img.shields.io/badge/API-Prusa%2FOrca_Endpoints-success?style=flat)
-![License](https://img.shields.io/badge/License-All_Rights_Reserved-red?style=flat)
+![License](https://img.shields.io/badge/License-Proprietary-red?style=flat)
 
 An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts supported 3D model and CAD inputs into printable outputs with validated pricing.
 
@@ -100,6 +100,8 @@ Public endpoints do not require admin key.
 ### Services
 
 - `app/services/pricing.service.js` - pricing load/save/migration/lookup logic.
+- `app/services/pricing/catalog.js` - in-memory pricing catalog: normalization, material lookup, and rate calculation.
+- `app/services/pricing/repository.js` - file-system pricing repository with primary/legacy pricing file resolution.
 - `app/services/admin-output.service.js` - validated admin output listing/download helpers and `ALL` ZIP bulk limit checks.
 - `app/services/slice.service.js` - end-to-end slicing orchestrator and queue error mapping.
 - `app/services/slice/command.js` - subprocess execution via `execFile` with timeout and optional debug logs.
@@ -112,6 +114,7 @@ Public endpoints do not require admin key.
 - `app/services/slice/options.js` - strict request option validation/parsing.
 - `app/services/slice/profiles.js` - profile selection, runtime profile generation, build-volume limits.
 - `app/services/slice/queue.js` - FIFO queue + per-client fairness + timeout enforcement.
+- `app/services/slice/response.js` - successful slice response composition and price calculation strategies.
 - `app/services/slice/transform.js` - transform planning/execution and bounds validation.
 - `app/services/slice/value-parsers.js` - safe parsing and profile filename sanitization.
 - `app/services/slice/zip.js` - ZIP safety inspection and safe extraction.
@@ -464,7 +467,7 @@ The app reads `.env` automatically on local startup via `dotenv`, and Docker rea
 
 - `input/` → temporary working input directory used during conversion/slicing pipeline.
 - `output/` → generated output artifacts (`.gcode`, `.sl1`, etc.).
-- `configs/` → slicer profile `.ini` files + persistent `pricing.json`.
+- `configs/` → slicer profiles (`prusa/*.ini`, `orca/*.json`) + persistent `pricing.json`.
 
 Runtime paths are root-scoped in both local and Docker execution.
 No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` are intentionally not used).
@@ -554,4 +557,4 @@ Detailed version history is maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 Copyright (c) Hajdú Patrik Zsolt. All rights reserved.
 
-Published for demonstration and portfolio purposes only. Using any part of this code as a solution for an academic assignment is strictly prohibited. See [LICENSE.md](LICENSE.md) for the full terms.
+Proprietary, commissioned work published for demonstration and portfolio purposes only. No rights to use, copy, modify or distribute it are granted. See [LICENSE.md](LICENSE.md) for the full terms.

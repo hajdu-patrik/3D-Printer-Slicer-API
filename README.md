@@ -10,6 +10,7 @@
 ![Docker](https://img.shields.io/badge/Container-Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Ubuntu Next](https://img.shields.io/badge/Next-Ubuntu_24.04-E95420?style=flat&logo=ubuntu&logoColor=white)
 ![API](https://img.shields.io/badge/API-Prusa%2FOrca_Endpoints-success?style=flat)
+![License](https://img.shields.io/badge/License-All_Rights_Reserved-red?style=flat)
 
 An automated 3D slicing and pricing API built with `Node.js` and `Python` that converts supported 3D model and CAD inputs into printable outputs with validated pricing.
 
@@ -72,7 +73,7 @@ Public endpoints do not require admin key.
 
 ---
 
-## 🧩 Application Module Map (app/*.js)
+## 📂 Application Module Map (app/*.js)
 
 ### Bootstrap
 
@@ -416,7 +417,7 @@ Common slicing error responses:
 
 ---
 
-## 🔏 Learn how to setup the `.env`, configs, input/output
+## ⚙️ Learn how to set up the `.env`, configs, input/output
 
 ### 1. Create your env file from template
 
@@ -520,7 +521,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 
 ---
 
-## 📝 Security and Runtime Change Snapshot (2026-04-21)
+## 📝 Security & Runtime Change Snapshot (2026-04-21)
 
 This repository currently includes the following synchronized changes across implementation and docs:
 
@@ -546,3 +547,11 @@ This repository currently includes the following synchronized changes across imp
 ## 📦 Release Log
 
 Detailed version history is maintained in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## 📄 License
+
+Copyright (c) Hajdú Patrik Zsolt. All rights reserved.
+
+Published for demonstration and portfolio purposes only. Using any part of this code as a solution for an academic assignment is strictly prohibited. See [LICENSE.md](LICENSE.md) for the full terms.

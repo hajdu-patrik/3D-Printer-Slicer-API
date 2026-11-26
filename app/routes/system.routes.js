@@ -6,7 +6,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const { APP_ROOT, OUTPUT_DIR, PRUSA_CONFIGS_DIR, ORCA_CONFIGS_DIR } = require('../config/paths');
 const { PYTHON_EXECUTABLE } = require('../config/python');
 const requireAdmin = require('../middleware/requireAdmin');
@@ -232,7 +232,7 @@ router.get('/admin/download/:fileName', adminRateLimiter, requireAdmin, (req, re
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${archiveFileName}"`);
 
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = new ZipArchive({ zlib: { level: 9 } });
 
         archive.on('warning', (warning_) => {
             console.warn(`[ADMIN DOWNLOAD WARN] ${warning_.message}`);

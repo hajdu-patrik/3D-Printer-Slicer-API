@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+### Dependencies
+
+- Updated npm dependencies to their newest releases and raised the declared minimums to match: `dotenv` 18.0.1 -> 18.0.10, `express` 5.2.1 -> 5.3.0, `helmet` 8.1.0 -> 8.3.0, `multer` 2.0.2 -> 2.5.0, `cors` 2.8.5 -> 2.8.6, `swagger-ui-express` 5.0.0 -> 5.0.1, `yauzl` 3.2.0 -> 3.4.0.
+- Upgraded `archiver` 7.0.1 -> 8.0.0 (major). The v8 package is ESM-only and exports named classes instead of a factory function; it loads through Node 24's `require(esm)`. `app/routes/system.routes.js` now uses `const { ZipArchive } = require('archiver')` and `new ZipArchive({ zlib: { level: 9 } })`. The streaming, abort, and error handling of `GET /admin/download/ALL` is unchanged.
+- Added an npm `overrides` entry that pins `readdir-glob`'s `minimatch` to `^11.0.9`, because `archiver@8.0.0` still pulls `readdir-glob@3.0.0` with a vulnerable `minimatch@10`.
+- `npm audit`: 8 advisories before this update (2 high: `body-parser` GHSA-27r3-jxmh-p828 and `multer` GHSA-q7qp-rjg7-q26m; 6 moderate: `glob`/`minimatch`/`archiver` chain and `qs`). It now reports 0. `pip-audit -r requirements.txt` reports no known vulnerabilities.
+
+### CI/CD
+
+- `.github/workflows/deploy.yml`: removed the `script_stop` input, which `appleboy/ssh-action@v1.2.5` no longer supports (the runner flagged it as an unexpected input and ignored it). The deploy script now starts with `set -e`, so it still stops at the first failing command.
+- Added a `Verify deploy secrets are configured` step before the SSH deploy. When `SERVER_IP`, `SERVER_USER`, `SSH_PRIVATE_KEY`, or `SERVER_PORT` is empty, the step fails and names the missing secrets. Before this, the SSH step failed with the vague `missing server host` error.
+
+### Validation
+
+- Built the Node 24 production image and ran these runners against it, all green: `full_api_prusa_fdm`, `full_api_orca_fdm`, `full_api_prusa_sl1`, `unsupported_upload`, `invalid_geometry`, `pricing_cycle`, `admin_output_files`, and `rate_limit_regression`. Also checked the `/admin/download/ALL` ZIP with Python's `zipfile.testzip()`.
+
 ### Removed
 
 - Retired the dual-tool agentic asset set. Deleted `.github/agents/*` (7 agent definitions), `.github/skills/*` (4 skill packs), `.github/instructions/*` (5 Copilot instruction overlays), `.github/copilot-instructions.md`, `.claude/agents/*` (7 mirrored agent definitions), `.claude/skills/*` (4 mirrored skill packs), and `.claude/.mcp.template.json`. `.github/workflows/deploy.yml` is the only remaining `.github` asset, so CI/CD is unaffected: the workflow file itself, its triggers, its validation steps, and its deploy script are untouched.
@@ -17,7 +33,7 @@ All notable changes to this project are documented in this file.
 
 ### Notes
 
-- No source file, test runner, dependency, or configuration key changed, so `package.json` stays at `3.1.5`.
+- The agentic-asset retirement changed no source file, test runner, dependency, or configuration key. The dependency and CI/CD changes above are not tagged as a release yet, so `package.json` stays at `3.1.5`.
 
 ## v3.1.5 (2026-09-22)
 

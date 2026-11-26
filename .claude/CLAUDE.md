@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-09-22
+Last synchronized: 2026-11-26
 
 ## Architecture Notice
 Claude is the primary agentic tool for this repository. Guidance lives in Markdown guides only;
@@ -167,5 +167,5 @@ Public docs:
 - tests/README.md
 
 ## CI/CD
-- `.github/workflows/deploy.yml` is the only `.github` asset kept: syntax validation on push to `main`, then SSH deploy to the VPS with a `/health` check.
-- Keep the workflow deterministic and minimal; secrets stay in GitHub repository settings.
+- `.github/workflows/ci.yml` ("CI") is the only `.github` asset kept: it validates JS/Python syntax on push to `main` and on manual dispatch. There is no automated deployment and the workflow uses no repository secrets.
+- Keep the workflow deterministic and minimal.

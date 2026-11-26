@@ -16,6 +16,7 @@ All notable changes to this project are documented in this file.
 - Removed the automatic VPS deployment. `.github/workflows/deploy.yml` ("CI and Deploy to VPS") became `.github/workflows/ci.yml` ("CI"). It keeps only the `validate` job (JavaScript and Python syntax checks on push to `main` and on manual dispatch). The `deploy` job is gone: the secret check, the `appleboy/ssh-action` SSH step, the remote `docker compose up -d --build`, and the `/health` probe. The workflow no longer reads the `SERVER_IP`, `SERVER_USER`, `SSH_PRIVATE_KEY`, or `SERVER_PORT` secrets. The deploy job had failed on every push since May 2026 because none of those secrets were configured.
 - Earlier in this release cycle the deploy job got a `set -e` fix for the removed `script_stop` input and a secret check. Both went away with the job.
 - Kept `Dockerfile`, `docker-compose.yml`, `docker-compose.dev.yml`, and `ops/monitoring/` unchanged: they still serve local runs, the integration test runners, and manual server setup.
+- Rewrote the `CI/CD` sections of `CLAUDE.md` and `.claude/CLAUDE.md` to describe `ci.yml` as a validation-only workflow with no deployment and no repository secrets.
 
 ### Validation
 

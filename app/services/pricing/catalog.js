@@ -2,8 +2,10 @@
  * In-memory pricing catalog containing pricing domain logic.
  */
 
+const { normalizeMaterialCostSection, normalizeSetupFeeSection } = require('./normalize');
+
 /**
- * @typedef {{FDM: Record<string, number>, SLA: Record<string, number>}} PricingMap
+ * @typedef {{FDM: Record<string, number>, SLA: Record<string, number>, materialCost: {FDM: Record<string, number>, SLA: Record<string, number>}, setupFee: {FDM: number, SLA: number}}} PricingMap
  */
 
 class PricingCatalog {
@@ -12,7 +14,9 @@ class PricingCatalog {
      */
     constructor(defaultPricing) {
         this.defaultPricing = structuredClone(defaultPricing);
-        this.pricing = structuredClone(defaultPricing);
+        this.defaultPricing.materialCost = normalizeMaterialCostSection(defaultPricing.materialCost);
+        this.defaultPricing.setupFee = normalizeSetupFeeSection(defaultPricing.setupFee, { FDM: 0, SLA: 0 });
+        this.pricing = structuredClone(this.defaultPricing);
     }
 
     /**
@@ -26,7 +30,9 @@ class PricingCatalog {
 
         this.pricing = {
             FDM: { ...this.defaultPricing.FDM, ...fdmSource },
-            SLA: { ...this.defaultPricing.SLA, ...slaSource }
+            SLA: { ...this.defaultPricing.SLA, ...slaSource },
+            materialCost: normalizeMaterialCostSection(pricingPayload?.materialCost),
+            setupFee: normalizeSetupFeeSection(pricingPayload?.setupFee, this.defaultPricing.setupFee)
         };
     }
 
@@ -140,6 +146,71 @@ class PricingCatalog {
      */
     removeMaterial(technology, materialKey) {
         delete this.pricing[technology][materialKey];
+        this.clearMaterialCost(technology, materialKey);
+    }
+
+    /**
+     * Find stored materialCost key case-insensitively.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @param {unknown} material Material label.
+     * @returns {string | null} Stored key or null.
+     */
+    findMaterialCostKey(technology, material) {
+        const requested = this.normalizeMaterialToken(material);
+        return Object.keys(this.pricing.materialCost[technology] || {}).find((key) => this.normalizeMaterialToken(key) === requested) || null;
+    }
+
+    /**
+     * Get material cost per unit (HUF/g for FDM, HUF/ml for SLA). 0 when not configured.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @param {unknown} material Material label.
+     * @returns {number} Cost per unit in HUF.
+     */
+    getMaterialCost(technology, material) {
+        const key = this.findMaterialCostKey(technology, material);
+        return key ? this.pricing.materialCost[technology][key] : 0;
+    }
+
+    /**
+     * Set material cost per unit. Value must already be validated by the caller.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @param {string} materialKey Canonical material key.
+     * @param {number} value Cost per unit in HUF.
+     * @returns {void}
+     */
+    setMaterialCost(technology, materialKey, value) {
+        this.clearMaterialCost(technology, materialKey);
+        this.pricing.materialCost[technology][materialKey] = value;
+    }
+
+    /**
+     * Remove material cost entry for material, if any.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @param {unknown} material Material label.
+     * @returns {void}
+     */
+    clearMaterialCost(technology, material) {
+        const key = this.findMaterialCostKey(technology, material);
+        if (key) delete this.pricing.materialCost[technology][key];
+    }
+
+    /**
+     * Get flat setup fee for technology. 0 when not configured.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @returns {number} Setup fee in HUF.
+     */
+    getSetupFee(technology) {
+        return this.pricing.setupFee[technology] || 0;
+    }
+
+    /**
+     * Set flat setup fee. Value must already be validated by the caller.
+     * @param {'FDM' | 'SLA'} technology Technology namespace.
+     * @param {number} value Setup fee in HUF.
+     * @returns {void}
+     */
+    setSetupFee(technology, value) {
+        this.pricing.setupFee[technology] = value;
     }
 
     /**

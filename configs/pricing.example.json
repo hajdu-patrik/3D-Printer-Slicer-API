@@ -9,5 +9,22 @@
     "Standard": 2000,
     "ABS-Like": 2000,
     "Flexible": 2800
+  },
+  "materialCost": {
+    "FDM": {
+      "PLA": 12,
+      "ABS": 12,
+      "PETG": 14,
+      "TPU": 18
+    },
+    "SLA": {
+      "Standard": 45,
+      "ABS-Like": 45,
+      "Flexible": 60
+    }
+  },
+  "setupFee": {
+    "FDM": 500,
+    "SLA": 1000
   }
 }

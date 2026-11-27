@@ -4,6 +4,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { normalizeMaterialCostSection, normalizeSetupFeeSection } = require('./normalize');
 
 /**
  * @typedef {{FDM: Record<string, number>, SLA: Record<string, number>}} PricingMap
@@ -34,7 +35,9 @@ class PricingRepository {
 
         return {
             FDM: { ...this.defaultPricing.FDM, ...fdmSource },
-            SLA: { ...this.defaultPricing.SLA, ...slaSource }
+            SLA: { ...this.defaultPricing.SLA, ...slaSource },
+            materialCost: normalizeMaterialCostSection(parsed.materialCost),
+            setupFee: normalizeSetupFeeSection(parsed.setupFee, this.defaultPricing.setupFee)
         };
     }
 
@@ -47,7 +50,15 @@ class PricingRepository {
     writePricingFile(filePath, pricing) {
         const parentDir = path.dirname(filePath);
         if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
-        fs.writeFileSync(filePath, JSON.stringify(pricing, null, 2));
+        // Atomic write: temp file in the same directory, then rename over target.
+        const tempFile = `${filePath}.${process.pid}.tmp`;
+        try {
+            fs.writeFileSync(tempFile, JSON.stringify(pricing, null, 2));
+            fs.renameSync(tempFile, filePath);
+        } catch (err) {
+            try { fs.rmSync(tempFile, { force: true }); } catch { /* ignore cleanup failure */ }
+            throw err;
+        }
     }
 
     /**

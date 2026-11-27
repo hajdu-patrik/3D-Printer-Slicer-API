@@ -8,6 +8,7 @@ services:
       - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/orient.py:/app/orient.py
       - ./app/preprocess.py:/app/preprocess.py
+      - ./app/preview_render.py:/app/preview_render.py
       - ./app/scale_model.py:/app/scale_model.py
       - ./app/config:/app/config
       - ./app/docs:/app/docs

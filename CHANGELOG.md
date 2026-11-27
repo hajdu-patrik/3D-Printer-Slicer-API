@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.3.0 (2026-11-27)
+
+### Added
+
+- `model_geometry` in every slice response, describing the final (oriented and transformed) model: `volume_cm3` (`null` for non-watertight meshes), `surface_area_cm2`, `is_watertight`, `triangle_count`. The printed mass remains `stats.material_used_g`.
+- PNG preview: the new request option `includePreview` (default `false`, `INVALID_INCLUDE_PREVIEW`) adds `preview: {format, width, height, data_base64}`. It is a 512×512 isometric shaded render of the model exactly as sliced.
+  - Rendering lives in the new `app/preview_render.py`: Pillow painter's algorithm with vertex-clustering LOD above 40k faces, no OpenGL needed. It runs through the new `preprocess.py preview` mode.
+  - A rendering failure never fails the slice.
+  - New dependency: `pillow==12.3.0`.
+- New printer profiles, all generated from the official presets of the bundled slicer versions:
+  - Original Prusa MK4 (Input Shaper, 0.4 mm, 250×210×220): `configs/prusa/MK4_FDM_0.1mm.ini`, `MK4_FDM_0.2mm.ini` and `MK4_FDM_0.3mm.ini`, from the PrusaSlicer 2.8.1 printer, print and filament presets. `binary_gcode` is off and thumbnails are disabled for headless parsing.
+  - MK4 material overlays `configs/prusa/materials/MK4_FDM_<MAT>.ini`, from `Generic PLA|PETG @PGIS` and `Generic ABS|FLEX @MK4`. They are selected automatically through the profile-name prefix.
+  - Bambu Lab A1 (256³) and A1 mini (180³): `configs/orca/Bambu_A1_0.4_nozzle.json` and `Bambu_A1_mini_0.4_nozzle.json`, from the OrcaSlicer 2.3.1 BBL machine presets. They are added to `compatible_printers` of the default process profiles.
+  - Bambu's `time_lapse_gcode` and `change_filament_gcode` are removed from the A1 profiles. Those blocks reset E (`G92 E0`) every layer, which corrupted Orca's absolute-E output for local presets: about 29× the real filament amount and a doubled print time.
+
+### Changed
+
+- `resolveMaterialOverlayPath` accepts an optional printer prefix (`resolvePrinterProfilePrefix`), so printer-specific overlays win over the generic ones. The result cache key includes the chosen overlay file.
+- Option parsing: `autoOrient` and `includePreview` share one boolean-flag parser.
+
+### Validation (v3.3.0)
+
+- Against the rebuilt Docker image:
+  - MK4 PLA/PETG/TPU at 0.2 mm, PLA at 0.1 mm and ABS at 0.3 mm.
+  - A1 PLA at 0.2 and 0.3 mm, and A1 mini PETG at 0.2 mm. All realistic: about 8.6 g of PLA for the 13.6 cm³ test part.
+  - Preview and geometry for FDM (scaled ×1.5) and SLA.
+- `full_api_test_runner` 21/21, `invalid_geometry` 5/5, `npm test` 46/46.
+
 ## v3.2.1 (2026-11-27)
 
 ### Fixed

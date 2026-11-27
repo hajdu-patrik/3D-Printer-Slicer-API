@@ -146,7 +146,8 @@ Public endpoints do not require admin key.
 
 ### Python helpers
 
-- `app/preprocess.py` - `preprocess` / `transform` modes; prints `@@RESULT@@{json}` with geometry metrics (no model healing). At most 2 Python spawns per request.
+- `app/preprocess.py` - `preprocess` / `transform` / `preview` modes; prints `@@RESULT@@{json}` with geometry metrics (no model healing). At most 2 Python spawns per request, plus one for `preview` when `includePreview=true`.
+- `app/preview_render.py` - isometric PNG preview renderer (Pillow, painter's algorithm, vertex-clustering LOD for dense meshes; no OpenGL needed).
 - `app/orient.py` - overhang-aware orientation candidate scoring.
 - `app/cad2stl.py` - STEP/IGES to STL with curvature-adaptive meshing (OCC healing options off).
 - `app/mesh2stl.py`, `app/scale_model.py` - mesh normalization and scale/rotation.
@@ -171,6 +172,7 @@ Optional fields:
 - `rotationX`, `rotationY`, `rotationZ` (degrees)
 - `autoOrient` (`true`/`false`, default `true`; invalid value returns `INVALID_AUTO_ORIENT`)
 - `quantity` (integer `1`-`1000`, default `1`; invalid value returns `INVALID_QUANTITY`; affects price only)
+- `includePreview` (`true`/`false`, default `false`; adds a 512×512 isometric PNG preview as base64 in `preview`; invalid value returns `INVALID_INCLUDE_PREVIEW`)
 - `printerProfile` (profile override filename)
 - `processProfile` (Orca only process profile override filename)
 
@@ -190,6 +192,7 @@ Uses `prusa-slicer`.
   - optional X/Y/Z rotation
 - Validates final model size against selected printer profile limits (`min`/`max` build volume)
 - You can override profile file with `printerProfile` from `configs/prusa`
+  - Original Prusa MK4 (Input Shaper, 0.4 mm): `MK4_FDM_0.1mm.ini`, `MK4_FDM_0.2mm.ini`, `MK4_FDM_0.3mm.ini` (250×210×220 mm). Pick the file that matches `layerHeight`; MK4-specific material overlays `configs/prusa/materials/MK4_FDM_<MAT>.ini` are used automatically.
 - `--center` is derived from the profile `bed_shape`; material overlays from `configs/prusa/materials/` are merged into the runtime profile (unknown material falls back to the base profile)
 
 Example:
@@ -220,7 +223,7 @@ Uses `orca-slicer`.
   - `ORCA_PROCESS_PROFILE_0_2`
   - `ORCA_PROCESS_PROFILE_0_3`
 - Request-level profile overrides are supported:
-  - `printerProfile` → machine profile from `configs/orca`
+  - `printerProfile` → machine profile from `configs/orca`: `Bambu_P1S_0.4_nozzle.json` (default, 256³ mm), `Bambu_A1_0.4_nozzle.json` (256³ mm), `Bambu_A1_mini_0.4_nozzle.json` (180³ mm). The default process profiles are compatible with all three.
   - `processProfile` → process profile from `configs/orca`
 - Output artifacts are resolved through a per-request isolated output directory before final filename alignment.
 - Supports same size preprocessing options as Prusa endpoint (`sizeUnit`, `keepProportions`, `targetSizeX/Y/Z`, `scalePercent`, rotations)
@@ -301,6 +304,12 @@ Cache key: SHA-256 of the file bytes + engine + all slicing options except `quan
       "z": 120
     }
   },
+  "model_geometry": {
+    "volume_cm3": 13.6,
+    "surface_area_cm2": 54.8,
+    "is_watertight": true,
+    "triangle_count": 24
+  },
   "build_volume_limits_mm": {
     "min": {
       "x": 1,
@@ -343,6 +352,8 @@ Notes:
 
 - `print_time_source` is `slicer` when time comes from slicer output (SLA: `.sl1` `config.ini`; FDM: seconds-accurate G-code comments preferred over `M73`) and `estimate` when the heuristic fallback was used.
 - `material_used_g` is used for FDM pricing, `material_used_ml` for SLA pricing.
+- `model_geometry` describes the final (oriented and transformed) model: solid volume (`null` when the mesh is not watertight), surface area and triangle count. The printed material mass, including infill and supports, is `stats.material_used_g`.
+- With `includePreview=true` the response also contains `preview: { "format": "png", "width": 512, "height": 512, "data_base64": "..." }`, an isometric render of the model exactly as it is sliced. A preview rendering failure never fails the slice; the field is then omitted.
 
 ### Common slicing error codes
 
@@ -586,15 +597,23 @@ No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` 
   - `configs/prusa/FDM_0.3mm.ini`
   - `configs/prusa/SLA_0.025mm.ini`
   - `configs/prusa/SLA_0.05mm.ini`
+  - `configs/prusa/MK4_FDM_0.1mm.ini`, `MK4_FDM_0.2mm.ini`, `MK4_FDM_0.3mm.ini` (Original Prusa MK4)
   - `configs/prusa/materials/FDM_<MAT>.ini`, `SLA_<MAT>_<layer>mm.ini` (material overlays)
+  - `configs/prusa/materials/MK4_FDM_<MAT>.ini` (MK4-specific material overlays)
 - Orca machine/process profiles (`.json`):
   - `configs/orca/Bambu_P1S_0.4_nozzle.json`
+  - `configs/orca/Bambu_A1_0.4_nozzle.json`, `configs/orca/Bambu_A1_mini_0.4_nozzle.json`
   - `configs/orca/FDM_0.1mm.json`
   - `configs/orca/FDM_0.2mm.json`
   - `configs/orca/FDM_0.3mm.json`
   - `configs/orca/materials/FDM_<MAT>.json` (filament presets)
 
 Material overlay values are taken from the official slicer presets bundled with the pinned slicer versions: PrusaSlicer 2.8.1 `Generic PLA/PETG/ABS/FLEX` filaments and the SL1S `Prusament Resin Tough` / `Flex80` resins, and OrcaSlicer 2.3.1 BBL `Generic PLA/PETG/ABS/TPU`. Each Prusa overlay names its source preset in its header comment.
+
+Printer profiles are generated from the official presets of the same slicer versions:
+
+- MK4 profiles: printer `Original Prusa MK4 Input Shaper 0.4 nozzle`, print presets `0.10mm FAST DETAIL @MK4IS 0.4` / `0.20mm SPEED @MK4IS 0.4` / `0.30mm DRAFT @MK4 0.4` (no MK4IS 0.30 preset exists), filament overlays from `Generic PLA|PETG @PGIS` and `Generic ABS|FLEX @MK4`. For headless use `binary_gcode` is `0` and thumbnails are disabled.
+- A1 / A1 mini: Orca BBL `Bambu Lab A1 0.4 nozzle` / `Bambu Lab A1 mini 0.4 nozzle`, with `time_lapse_gcode` and `change_filament_gcode` removed. Those Bambu blocks reset E (`G92 E0`) every layer, which corrupts the absolute-E G-code Orca writes for local presets.
 
 You can add your own profiles (for example 2 FDM + 2 SLA for Prusa, or multiple Orca machine profiles), then select them per request with `printerProfile` (and `processProfile` for Orca).
 

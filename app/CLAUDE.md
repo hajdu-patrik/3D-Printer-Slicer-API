@@ -119,6 +119,7 @@ This document describes the application runtime inside app/.
 - app/services/slice/input-processing.js
   - Converts supported model/CAD inputs to STL via Python scripts (cad2stl.py for STEP/IGES first).
   - Runs preprocess.py once (normalize, optional orientation per `autoOrient`, geometry metrics); at most 2 Python spawns per request.
+  - renderPreview runs the `preview` mode on the final STL when `includePreview=true`; failures are logged and never fail the slice.
 - app/services/slice/model-stats.js
   - Parses slicer outputs for print-time/material stats (`print_time_source`, `material_used_g`, `material_used_ml`).
   - Falls back to a print-time heuristic only when slicer metadata is absent.
@@ -131,7 +132,7 @@ This document describes the application runtime inside app/.
 - app/services/slice/number-utils.js
   - Shared positive-integer parsing helper for queue/zip settings.
 - app/services/slice/options.js
-  - Validates request fields: layerHeight, material, infill, size/scale/rotation, unit, autoOrient, quantity, and profile overrides.
+  - Validates request fields: layerHeight, material, infill, size/scale/rotation, unit, autoOrient, quantity, includePreview, and profile overrides.
   - Enforces engine/technology layer constraints and material-technology compatibility.
 - app/services/slice/profiles.js
   - Resolves Prusa and Orca profile selection.
@@ -139,6 +140,7 @@ This document describes the application runtime inside app/.
   - Creates runtime profile variants (merging configs/prusa/materials overlays and selecting configs/orca/materials filament JSON) and resolves build-volume limits and Prusa bed center from profile metadata.
 - app/services/slice/response.js
   - Composes successful slice response payloads.
+  - Builds `model_geometry` (final model metrics) and the optional `preview` payload.
   - Encapsulates pricing (setup fee, material cost, quantity, `price_breakdown`) and profile payload mapper strategies for engine/technology-specific response shaping.
 - app/services/slice/queue.js
   - Implements bounded FIFO queue with MAX_CONCURRENT_SLICES, MAX_SLICE_QUEUE_LENGTH, MAX_SLICE_QUEUE_PER_IP, and MAX_SLICE_QUEUE_WAIT_MS.
@@ -167,7 +169,8 @@ This document describes the application runtime inside app/.
 - app/cad2stl.py: CAD-to-STL conversion (curvature-adaptive meshing sized from bbox diagonal, OCC healing options off).
 - app/mesh2stl.py: mesh normalization to STL.
 - app/orient.py: overhang-aware orientation candidate scoring.
-- app/preprocess.py: `preprocess` and `transform` modes; prints `@@RESULT@@{json}` (x, y, z, volume_mm3, surface_area_mm2, is_watertight, triangle_count). No model healing.
+- app/preprocess.py: `preprocess`, `transform` and `preview` modes; prints `@@RESULT@@{json}` (x, y, z, volume_mm3, surface_area_mm2, is_watertight, triangle_count; preview: width, height, format). No model healing.
+- app/preview_render.py: isometric PNG renderer (Pillow painter's algorithm, vertex-clustering LOD above 40k faces; preview only, never used for slicing).
 - app/scale_model.py: scale/rotation transform execution.
 
 ## Endpoint Behavior Notes

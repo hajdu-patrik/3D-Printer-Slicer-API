@@ -22,6 +22,7 @@ This folder contains runtime configuration files used by slicing and pricing.
 
 - configs/prusa/materials/FDM_<MAT>.ini and SLA_<MAT>_<layer>mm.ini
   - Material overlays merged into the Prusa runtime profile (safe-name regex; unknown material uses the base profile).
+  - Values are copied from the official PrusaSlicer 2.8.1 presets: FDM from `[filament:Generic PLA|PETG|ABS|FLEX]` (PrusaResearch.ini, TPU -> Generic FLEX), SLA from `[sla_material:Prusament Resin Tough Prusa Orange|Flex80 Black @<layer> SL1S]` (PrusaResearchSLA.ini). Each file header names its source preset; re-sync them when the bundled PrusaSlicer version changes.
 
 - configs/orca/*.json
   - Orca machine and process presets.
@@ -29,6 +30,7 @@ This folder contains runtime configuration files used by slicing and pricing.
 
 - configs/orca/materials/FDM_<MAT>.json
   - Orca filament presets passed via `--load-filaments`.
+  - Values are copied from the official OrcaSlicer 2.3.1 BBL presets `Generic PLA|PETG|ABS|TPU` (inheritance resolved; all list Bambu Lab P1S 0.4 nozzle as compatible). Re-sync them when the bundled OrcaSlicer version changes.
 
 ## Safety Constraints
 

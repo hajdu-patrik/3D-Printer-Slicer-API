@@ -16,7 +16,7 @@
         "1.24"
     ],
     "filament_max_volumetric_speed": [
-        "21"
+        "12"
     ],
     "nozzle_temperature": [
         "220"
@@ -25,16 +25,16 @@
         "220"
     ],
     "cool_plate_temp": [
-        "55"
+        "35"
     ],
     "cool_plate_temp_initial_layer": [
-        "55"
+        "35"
     ],
     "eng_plate_temp": [
-        "55"
+        "0"
     ],
     "eng_plate_temp_initial_layer": [
-        "55"
+        "0"
     ],
     "hot_plate_temp": [
         "55"
@@ -54,10 +54,16 @@
     "fan_max_speed": [
         "100"
     ],
+    "fan_cooling_layer_time": [
+        "100"
+    ],
+    "close_fan_the_first_x_layers": [
+        "1"
+    ],
     "slow_down_min_speed": [
         "20"
     ],
     "slow_down_layer_time": [
-        "4"
+        "8"
     ]
 }

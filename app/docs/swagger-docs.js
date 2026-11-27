@@ -4,7 +4,94 @@
  * @returns {object} OpenAPI document object.
  */
 function createSwaggerDocument(pricing) {
-    return {
+    const materialCostSchema = {
+        type: 'object',
+        properties: {
+            FDM: { type: 'object', additionalProperties: { type: 'number' }, description: 'HUF per gram.' },
+            SLA: { type: 'object', additionalProperties: { type: 'number' }, description: 'HUF per millilitre.' }
+        }
+    };
+    const setupFeeSchema = {
+        type: 'object',
+        properties: {
+            FDM: { type: 'number', description: 'Flat HUF per order.' },
+            SLA: { type: 'number', description: 'Flat HUF per order.' }
+        }
+    };
+    const apiKeyHeader = { name: 'x-api-key', in: 'header', required: true, schema: { type: 'string' } };
+
+    const priceBreakdownSchema = {
+        type: 'object',
+        description: 'Price calculation breakdown. total = ceil((setup_fee + quantity * per_piece) / 10) * 10, per_piece = max(hours, 0.25) * hourly rate + material amount * material cost per unit.',
+        properties: {
+            time_cost_huf: { type: 'number' },
+            material_cost_huf: { type: 'number' },
+            setup_fee_huf: { type: 'number' },
+            per_piece_huf: { type: 'number' },
+            quantity: { type: 'integer' },
+            total_huf: { type: 'number' },
+            material_unit: { type: 'string', enum: ['g', 'ml'] },
+            material_cost_per_unit: { type: 'number' }
+        }
+    };
+
+    const statsSchema = {
+        type: 'object',
+        properties: {
+            print_time_seconds: { type: 'number' },
+            print_time_readable: { type: 'string' },
+            print_time_source: { type: 'string', enum: ['slicer', 'estimate'], description: '`slicer` when read from slicer output, `estimate` when the heuristic fallback was used.' },
+            material_used_m: { type: 'number' },
+            material_used_g: { type: 'number', description: 'FDM filament weight in grams.' },
+            material_used_ml: { type: 'number', description: 'SLA resin volume in millilitres.' },
+            object_height_mm: { type: 'number' },
+            estimated_price_huf: { type: 'number' }
+        }
+    };
+
+    const sliceSuccessSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean', example: true },
+            cache_hit: { type: 'boolean', description: 'True when the slicing result was served from the result cache (price is recomputed, no new output file is created).' },
+            slicer_engine: { type: 'string', enum: ['prusa', 'orca'] },
+            technology: { type: 'string', enum: ['FDM', 'SLA'] },
+            material: { type: 'string' },
+            infill: { type: 'string', example: '20%' },
+            profiles: { type: 'object', additionalProperties: { type: 'string' } },
+            model_transform: { type: 'object' },
+            build_volume_limits_mm: { type: 'object' },
+            hourly_rate: { type: 'number' },
+            quantity: { type: 'integer', example: 1 },
+            price_breakdown: priceBreakdownSchema,
+            stats: statsSchema
+        }
+    };
+
+    const jobAcceptedSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean', example: true },
+            jobId: { type: 'string', format: 'uuid' },
+            status: { type: 'string', example: 'queued' },
+            statusUrl: { type: 'string', example: '/slice/jobs/00000000-0000-4000-8000-000000000000' }
+        }
+    };
+
+    const autoOrientField = {
+        type: 'boolean',
+        default: true,
+        description: 'Enable automatic orientation optimization. Invalid value returns `INVALID_AUTO_ORIENT`.'
+    };
+    const quantityField = {
+        type: 'integer',
+        default: 1,
+        minimum: 1,
+        maximum: 1000,
+        description: 'Number of pieces to price (pricing only; not part of the result cache key). Invalid value returns `INVALID_QUANTITY`.'
+    };
+
+    const document = {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
@@ -21,7 +108,7 @@ function createSwaggerDocument(pricing) {
             get: {
                 tags: ['Pricing'],
                 summary: 'Get current pricing configuration.',
-                description: 'Returns the full pricing object for FDM and SLA technologies.',
+                description: 'Returns the full pricing object: hourly rates for FDM and SLA plus the optional materialCost (HUF/g FDM, HUF/ml SLA) and setupFee (flat HUF per order) sections.',
                 responses: {
                     200: {
                         description: 'Pricing object retrieved successfully',
@@ -31,7 +118,9 @@ function createSwaggerDocument(pricing) {
                                     type: 'object',
                                     properties: {
                                         FDM: { type: 'object', additionalProperties: { type: 'number' } },
-                                        SLA: { type: 'object', additionalProperties: { type: 'number' } }
+                                        SLA: { type: 'object', additionalProperties: { type: 'number' } },
+                                        materialCost: materialCostSchema,
+                                        setupFee: setupFeeSchema
                                     }
                                 }
                             }
@@ -61,7 +150,8 @@ function createSwaggerDocument(pricing) {
                                 type: 'object',
                                 properties: {
                                     material: { type: 'string', example: 'ASA', description: 'New FDM material name.' },
-                                    price: { type: 'number', example: 1200, description: 'Hourly price in HUF.' }
+                                    price: { type: 'number', example: 1200, description: 'Hourly price in HUF.' },
+                                    materialCostPerUnit: { type: 'number', example: 14, description: 'Optional material cost in HUF per gram (FDM).' }
                                 },
                                 required: ['material', 'price']
                             }
@@ -98,7 +188,8 @@ function createSwaggerDocument(pricing) {
                                 type: 'object',
                                 properties: {
                                     material: { type: 'string', example: 'High-Temp', description: 'New SLA material name.' },
-                                    price: { type: 'number', example: 2400, description: 'Hourly price in HUF.' }
+                                    price: { type: 'number', example: 2400, description: 'Hourly price in HUF.' },
+                                    materialCostPerUnit: { type: 'number', example: 50, description: 'Optional material cost in HUF per millilitre (SLA).' }
                                 },
                                 required: ['material', 'price']
                             }
@@ -117,7 +208,7 @@ function createSwaggerDocument(pricing) {
         '/pricing/FDM/{material}': {
             patch: {
                 tags: ['Pricing'],
-                summary: 'Update existing FDM material price.',
+                summary: 'Update existing FDM material price and/or material cost.',
                 description: 'Protected endpoint. Requires x-api-key header.',
                 parameters: [
                     {
@@ -140,9 +231,10 @@ function createSwaggerDocument(pricing) {
                             schema: {
                                 type: 'object',
                                 properties: {
-                                    price: { type: 'number', example: 1000, description: 'Hourly price in HUF for the specified material and technology.' }
+                                    price: { type: 'number', example: 1000, description: 'Hourly price in HUF for the specified material and technology. Optional when materialCostPerUnit is provided.' },
+                                    materialCostPerUnit: { type: 'number', example: 14, description: 'Optional material cost in HUF per gram (FDM).' }
                                 },
-                                required: ['price']
+                                description: 'At least one of price or materialCostPerUnit is required.'
                             }
                         }
                     }
@@ -184,7 +276,7 @@ function createSwaggerDocument(pricing) {
         '/pricing/SLA/{material}': {
             patch: {
                 tags: ['Pricing'],
-                summary: 'Update existing SLA material price.',
+                summary: 'Update existing SLA material price and/or material cost.',
                 description: 'Protected endpoint. Requires x-api-key header.',
                 parameters: [
                     {
@@ -207,9 +299,10 @@ function createSwaggerDocument(pricing) {
                             schema: {
                                 type: 'object',
                                 properties: {
-                                    price: { type: 'number', example: 1800, description: 'Hourly price in HUF for the specified material and technology.' }
+                                    price: { type: 'number', example: 1800, description: 'Hourly price in HUF for the specified material and technology. Optional when materialCostPerUnit is provided.' },
+                                    materialCostPerUnit: { type: 'number', example: 14, description: 'Optional material cost in HUF per millilitre (SLA).' }
                                 },
-                                required: ['price']
+                                description: 'At least one of price or materialCostPerUnit is required.'
                             }
                         }
                     }
@@ -245,6 +338,114 @@ function createSwaggerDocument(pricing) {
                     401: { description: 'Unauthorized' },
                     404: { description: 'Material not found' },
                     500: { description: 'Persistence error' }
+                }
+            }
+        },
+        '/pricing/{technology}/setup-fee': {
+            put: {
+                tags: ['Pricing'],
+                summary: 'Set the flat per-order setup fee for a technology.',
+                description: 'Protected endpoint. Requires x-api-key header.',
+                parameters: [
+                    { name: 'technology', in: 'path', required: true, schema: { type: 'string', enum: ['FDM', 'SLA'] } },
+                    apiKeyHeader
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    setupFee: { type: 'number', example: 500, minimum: 0, description: 'Flat setup fee in HUF per order.' }
+                                },
+                                required: ['setupFee']
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    200: { description: 'Setup fee updated successfully' },
+                    400: { description: 'Validation error' },
+                    401: { description: 'Unauthorized' },
+                    500: { description: 'Persistence error' }
+                }
+            }
+        },
+        '/prusa/slice/jobs': {
+            post: {
+                tags: ['Slicing'],
+                summary: 'Submit an asynchronous PrusaSlicer job.',
+                description: 'Same multipart fields and validation as POST /prusa/slice, but returns 202 immediately with a jobId. Poll GET /slice/jobs/{jobId} for the result. Validation errors and queue rejections (SLICE_QUEUE_FULL, SLICE_QUEUE_CLIENT_LIMIT) are returned synchronously.',
+                requestBody: null,
+                responses: {
+                    202: { description: 'Job accepted', content: { 'application/json': { schema: jobAcceptedSchema } } },
+                    400: { description: 'Bad Request' },
+                    429: { description: 'Rate limit or per-client queue limit exceeded' },
+                    503: { description: 'Queue full or job store full (JOB_STORE_FULL)' }
+                }
+            }
+        },
+        '/orca/slice/jobs': {
+            post: {
+                tags: ['Slicing'],
+                summary: 'Submit an asynchronous OrcaSlicer job.',
+                description: 'Same multipart fields and validation as POST /orca/slice, but returns 202 immediately with a jobId. Poll GET /slice/jobs/{jobId} for the result.',
+                requestBody: null,
+                responses: {
+                    202: { description: 'Job accepted', content: { 'application/json': { schema: jobAcceptedSchema } } },
+                    400: { description: 'Bad Request' },
+                    429: { description: 'Rate limit or per-client queue limit exceeded' },
+                    503: { description: 'Queue full or job store full (JOB_STORE_FULL)' }
+                }
+            }
+        },
+        '/slice/jobs/{jobId}': {
+            get: {
+                tags: ['Slicing'],
+                summary: 'Get asynchronous slice job status.',
+                description: 'Status is one of queued, processing, done (with result) or failed (with error.status and error.body). Rate limited per IP (default 60 requests / 60 seconds, JOB_POLL_RATE_LIMIT_EXCEEDED).',
+                parameters: [
+                    { name: 'jobId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
+                ],
+                responses: {
+                    200: {
+                        description: 'Job status',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        status: { type: 'string', enum: ['queued', 'processing', 'done', 'failed'] },
+                                        result: sliceSuccessSchema,
+                                        error: {
+                                            type: 'object',
+                                            properties: {
+                                                status: { type: 'integer' },
+                                                body: { type: 'object' }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    400: { description: 'Invalid job id (INVALID_JOB_ID)' },
+                    404: { description: 'Job not found or expired (JOB_NOT_FOUND)' },
+                    429: { description: 'Polling rate limit exceeded (JOB_POLL_RATE_LIMIT_EXCEEDED)' }
+                }
+            }
+        },
+        '/metrics': {
+            get: {
+                tags: ['Admin'],
+                summary: 'Prometheus text-format metrics.',
+                description: 'Protected endpoint. Requires x-api-key header. Exposes slice, queue, job and cache metrics.',
+                parameters: [apiKeyHeader],
+                responses: {
+                    200: { description: 'Prometheus exposition format', content: { 'text/plain': { schema: { type: 'string' } } } },
+                    401: { description: 'Unauthorized' },
+                    429: { description: 'Admin rate limit exceeded' }
                 }
             }
         },
@@ -326,6 +527,8 @@ function createSwaggerDocument(pricing) {
                                         default: 0,
                                         description: 'Optional rotation around Z axis in degrees.'
                                     },
+                                    autoOrient: autoOrientField,
+                                    quantity: quantityField,
                                     printerProfile: {
                                         type: 'string',
                                         description: 'Optional override profile filename from `configs/prusa` (for example `FDM_0.2mm.ini`).'
@@ -337,7 +540,9 @@ function createSwaggerDocument(pricing) {
                     }
                 },
                 responses: {
-                    200: { description: 'Slicing successful' },
+                    200: { description: 'Slicing successful', content: { 'application/json': { schema: sliceSuccessSchema } } },
+                    429: { description: 'Rate limit exceeded or per-client queue limit reached' },
+                    503: { description: 'Slice queue full or queue wait timeout' },
                     400: { description: 'Bad Request' },
                     422: { description: 'Model or profile validation failed (for example out-of-printer-bounds model).' },
                     500: { description: 'Server Error' }
@@ -422,6 +627,8 @@ function createSwaggerDocument(pricing) {
                                         default: 0,
                                         description: 'Optional rotation around Z axis in degrees.'
                                     },
+                                    autoOrient: autoOrientField,
+                                    quantity: quantityField,
                                     printerProfile: {
                                         type: 'string',
                                         description: 'Optional Orca machine profile filename from `configs/orca` (for example `Bambu_P1S_0.4_nozzle.json`).'
@@ -437,7 +644,9 @@ function createSwaggerDocument(pricing) {
                     }
                 },
                 responses: {
-                    200: { description: 'Slicing successful' },
+                    200: { description: 'Slicing successful', content: { 'application/json': { schema: sliceSuccessSchema } } },
+                    429: { description: 'Rate limit exceeded or per-client queue limit reached' },
+                    503: { description: 'Slice queue full or queue wait timeout' },
                     400: { description: 'Bad Request' },
                     422: { description: 'Model or profile validation failed (for example out-of-printer-bounds model).' },
                     500: { description: 'Server Error' }
@@ -542,6 +751,12 @@ function createSwaggerDocument(pricing) {
         }
     }
     };
+
+    // Async job endpoints share the multipart contract of the synchronous endpoints.
+    document.paths['/prusa/slice/jobs'].post.requestBody = document.paths['/prusa/slice'].post.requestBody;
+    document.paths['/orca/slice/jobs'].post.requestBody = document.paths['/orca/slice'].post.requestBody;
+
+    return document;
 }
 
 module.exports = createSwaggerDocument;

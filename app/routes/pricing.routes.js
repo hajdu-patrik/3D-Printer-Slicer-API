@@ -12,8 +12,17 @@ const {
     normalizeTechnology,
     findMaterialKey,
     updateMaterialPrice,
-    removeMaterial
+    removeMaterial,
+    getMaterialCost,
+    setMaterialCost,
+    getSetupFee,
+    setSetupFee
 } = require('../services/pricing.service');
+const {
+    MAX_MATERIAL_COST_PER_UNIT_HUF,
+    MAX_SETUP_FEE_HUF,
+    isValidAmount
+} = require('../services/pricing/normalize');
 
 const router = express.Router();
 
@@ -61,6 +70,30 @@ function parsePriceOrResponse(res, rawPrice) {
         response: null,
         price
     };
+}
+
+/**
+ * Parse optional materialCostPerUnit (HUF/g FDM, HUF/ml SLA). Absent -> value undefined.
+ * @param {import('express').Response} res Express response object.
+ * @param {unknown} rawValue Input value.
+ * @returns {{response: import('express').Response | null, provided?: boolean, value?: number}} Parse result.
+ */
+function parseMaterialCostOrResponse(res, rawValue) {
+    if (rawValue === undefined) {
+        return { response: null, provided: false };
+    }
+
+    const value = typeof rawValue === 'number' || (typeof rawValue === 'string' && rawValue.trim() !== '') ? Number(rawValue) : NaN;
+    if (!isValidAmount(value, MAX_MATERIAL_COST_PER_UNIT_HUF)) {
+        return {
+            response: res.status(400).json({
+                success: false,
+                error: `materialCostPerUnit must be a number between 0 and ${MAX_MATERIAL_COST_PER_UNIT_HUF}.`
+            })
+        };
+    }
+
+    return { response: null, provided: true, value };
 }
 
 /**
@@ -130,11 +163,19 @@ function createMaterialForTechnology(req, res, technology) {
     }
     const price = priceResult.price;
 
+    const costResult = parseMaterialCostOrResponse(res, req.body?.materialCostPerUnit);
+    if (costResult.response) {
+        return costResult.response;
+    }
+
     if (findMaterialKey(technology, materialParam)) {
         return res.status(409).json({ success: false, error: 'Material already exists for this technology.' });
     }
 
     const materialKey = updateMaterialPrice(technology, materialParam, price);
+    if (costResult.provided) {
+        setMaterialCost(technology, materialKey, costResult.value);
+    }
 
     const saveErrorResponse = persistPricingOrResponse(res);
     if (saveErrorResponse) {
@@ -147,6 +188,7 @@ function createMaterialForTechnology(req, res, technology) {
         technology,
         material: materialKey,
         price,
+        materialCostPerUnit: getMaterialCost(technology, materialKey),
         message: 'Material created successfully.'
     });
 }
@@ -191,11 +233,20 @@ router.patch('/pricing/:technology/:material', adminRateLimiter, requireAdmin, (
     }
     const technology = technologyResult.technology;
 
-    const priceResult = parsePriceOrResponse(res, req.body?.price);
-    if (priceResult.response) {
-        return priceResult.response;
+    const costResult = parseMaterialCostOrResponse(res, req.body?.materialCostPerUnit);
+    if (costResult.response) {
+        return costResult.response;
     }
-    const price = priceResult.price;
+
+    // price is optional only when materialCostPerUnit is supplied (cost-only update).
+    let price;
+    if (!(costResult.provided && req.body?.price === undefined)) {
+        const priceResult = parsePriceOrResponse(res, req.body?.price);
+        if (priceResult.response) {
+            return priceResult.response;
+        }
+        price = priceResult.price;
+    }
 
     const materialResult = parseMaterialOrResponse(res, req.params.material);
     if (materialResult.response) {
@@ -211,19 +262,62 @@ router.patch('/pricing/:technology/:material', adminRateLimiter, requireAdmin, (
         });
     }
 
-    const materialKey = updateMaterialPrice(technology, existingMaterialKey, price);
+    const materialKey = price === undefined ? existingMaterialKey : updateMaterialPrice(technology, existingMaterialKey, price);
+    if (costResult.provided) {
+        setMaterialCost(technology, materialKey, costResult.value);
+    }
 
     const saveErrorResponse = persistPricingOrResponse(res);
     if (saveErrorResponse) {
         return saveErrorResponse;
     }
 
-    logPricingUpdate(req, technology, materialKey, `updated to ${price} HUF/hour`);
+    logPricingUpdate(req, technology, materialKey, `updated${price === undefined ? '' : ` to ${price} HUF/hour`}${costResult.provided ? ` (materialCostPerUnit=${costResult.value})` : ''}`);
     return res.status(200).json({
         success: true,
         technology,
         material: materialKey,
-        price
+        price: price === undefined ? getPricing()[technology][materialKey] : price,
+        materialCostPerUnit: getMaterialCost(technology, materialKey)
+    });
+});
+
+/**
+ * Set flat per-order setup fee (HUF) for a technology.
+ * Body: { setupFee: number >= 0 }.
+ * @param {import('express').Request} req Express request object.
+ * @param {import('express').Response} res Express response object.
+ * @returns {import('express').Response}
+ */
+router.put('/pricing/:technology/setup-fee', adminRateLimiter, requireAdmin, (req, res) => {
+    const technologyResult = parseTechnologyOrResponse(res, req.params.technology);
+    if (technologyResult.response) {
+        return technologyResult.response;
+    }
+    const technology = technologyResult.technology;
+
+    const raw = req.body?.setupFee;
+    const setupFee = typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '') ? Number(raw) : NaN;
+    if (!isValidAmount(setupFee, MAX_SETUP_FEE_HUF)) {
+        return res.status(400).json({
+            success: false,
+            error: `setupFee must be a number between 0 and ${MAX_SETUP_FEE_HUF}.`
+        });
+    }
+
+    setSetupFee(technology, setupFee);
+
+    const saveErrorResponse = persistPricingOrResponse(res);
+    if (saveErrorResponse) {
+        return saveErrorResponse;
+    }
+
+    const clientIp = getClientIp(req);
+    console.log(`[PRICING UPDATE] ${technology}.setupFee set to ${getSetupFee(technology)} HUF by ${clientIp} (requestId=${req.requestId || 'n/a'})`);
+    return res.status(200).json({
+        success: true,
+        technology,
+        setupFee: getSetupFee(technology)
     });
 });
 

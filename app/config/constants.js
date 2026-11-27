@@ -62,7 +62,11 @@ const ORCA_PROCESS_PROFILE_BY_LAYER = {
  */
 const DEFAULT_PRICING = {
     FDM: { PLA: 800, ABS: 800, PETG: 900, TPU: 900 },
-    SLA: { Standard: 1800, 'ABS-Like': 1800, Flexible: 2400 }
+    SLA: { Standard: 1800, 'ABS-Like': 1800, Flexible: 2400 },
+    // Optional: HUF per gram (FDM) / per ml (SLA); empty = material cost 0.
+    materialCost: { FDM: {}, SLA: {} },
+    // Optional: flat HUF per order by technology.
+    setupFee: { FDM: 0, SLA: 0 }
 };
 
 /**

@@ -3,19 +3,77 @@
  */
 
 const path = require('node:path');
-const { getRate } = require('../pricing.service');
+const { getRate, getMaterialCost, getSetupFee } = require('../pricing.service');
 const { roundDimensions, roundToThree } = require('./common');
 
+const MIN_BILLABLE_HOURS = 0.25;
+
 /**
- * Price calculator strategy: minimum quarter-hour billing with upward rounding to nearest 10 HUF.
- * @param {number} hourlyRate Hourly material rate.
- * @param {{print_time_seconds: number}} stats Parsed print stats.
- * @returns {number} Calculated total price in HUF.
+ * Round to two decimals for presentation of breakdown amounts.
+ * @param {number} value Raw amount.
+ * @returns {number} Rounded amount.
  */
-function calculateQuarterHourMinimumPrice(hourlyRate, stats) {
+function roundToTwo(value) {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * Coerce to a finite non-negative number, otherwise 0.
+ * @param {unknown} value Raw value.
+ * @returns {number} Safe number.
+ */
+function toNonNegativeNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+/**
+ * Normalize quantity to an integer >= 1 (default 1).
+ * @param {unknown} value Raw quantity.
+ * @returns {number} Quantity.
+ */
+function normalizeQuantity(value) {
+    const num = Math.floor(Number(value));
+    return Number.isFinite(num) && num >= 1 ? num : 1;
+}
+
+/**
+ * Material amount extractors per technology (FDM grams, SLA millilitres).
+ */
+const MATERIAL_USAGE = Object.freeze({
+    FDM: { unit: 'g', read: (stats) => toNonNegativeNumber(stats.material_used_g) },
+    SLA: { unit: 'ml', read: (stats) => toNonNegativeNumber(stats.material_used_ml) }
+});
+
+/**
+ * Price calculator strategy: minimum quarter-hour billing, material cost, setup fee and quantity,
+ * with upward rounding of the total to nearest 10 HUF.
+ * perPiece = max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit
+ * total = ceil((setupFee + quantity * perPiece) / 10) * 10
+ * @param {{hourlyRate: number, materialCostPerUnit: number, setupFee: number, quantity: number, materialUnit: 'g'|'ml', stats: Record<string, number>}} input Pricing input.
+ * @returns {Record<string, number|string>} Price breakdown including total_huf.
+ */
+function calculateQuarterHourMinimumPrice(input) {
+    const { hourlyRate, materialCostPerUnit, setupFee, quantity, materialUnit, stats } = input;
+    const usage = (MATERIAL_USAGE[materialUnit === 'ml' ? 'SLA' : 'FDM']).read(stats);
     const printHours = stats.print_time_seconds / 3600;
-    const calcHours = Math.max(printHours, 0.25);
-    return Math.ceil((calcHours * hourlyRate) / 10) * 10;
+    const calcHours = Math.max(printHours, MIN_BILLABLE_HOURS);
+
+    const timeCost = calcHours * hourlyRate;
+    const materialCost = usage * materialCostPerUnit;
+    const perPiece = timeCost + materialCost;
+    const total = Math.ceil((setupFee + quantity * perPiece) / 10) * 10;
+
+    return {
+        time_cost_huf: roundToTwo(timeCost),
+        material_cost_huf: roundToTwo(materialCost),
+        setup_fee_huf: setupFee,
+        per_piece_huf: roundToTwo(perPiece),
+        quantity,
+        total_huf: total,
+        material_unit: materialUnit,
+        material_cost_per_unit: materialCostPerUnit
+    };
 }
 
 const PRICING_STRATEGIES = Object.freeze({
@@ -26,7 +84,7 @@ const PRICING_STRATEGIES = Object.freeze({
 /**
  * Resolve pricing calculation strategy for technology.
  * @param {'FDM'|'SLA'} technology Active print technology.
- * @returns {(hourlyRate: number, stats: {print_time_seconds: number}) => number} Pricing strategy.
+ * @returns {(input: object) => Record<string, number|string>} Pricing strategy.
  */
 function resolvePricingStrategy(technology) {
     return PRICING_STRATEGIES[technology] || calculateQuarterHourMinimumPrice;
@@ -36,16 +94,27 @@ function resolvePricingStrategy(technology) {
  * Calculate request pricing for parsed print stats.
  * @param {'FDM'|'SLA'} technology Active print technology.
  * @param {string} material Material key.
- * @param {{print_time_seconds: number}} stats Parsed print stats.
- * @returns {{hourlyRate: number, totalPrice: number}} Pricing result.
+ * @param {{print_time_seconds: number, material_used_g?: number, material_used_ml?: number}} stats Parsed print stats.
+ * @param {number} [quantity] Number of pieces (default 1).
+ * @returns {{hourlyRate: number, totalPrice: number, quantity: number, breakdown: Record<string, number|string>}} Pricing result.
  */
-function calculateSlicePricing(technology, material, stats) {
+function calculateSlicePricing(technology, material, stats, quantity = 1) {
     const hourlyRate = getRate(technology, material);
-    const totalPrice = resolvePricingStrategy(technology)(hourlyRate, stats);
+    const normalizedQuantity = normalizeQuantity(quantity);
+    const breakdown = resolvePricingStrategy(technology)({
+        hourlyRate,
+        materialCostPerUnit: getMaterialCost(technology, material),
+        setupFee: getSetupFee(technology),
+        quantity: normalizedQuantity,
+        materialUnit: technology === 'SLA' ? 'ml' : 'g',
+        stats
+    });
 
     return {
         hourlyRate,
-        totalPrice
+        totalPrice: breakdown.total_huf,
+        quantity: normalizedQuantity,
+        breakdown
     };
 }
 
@@ -97,10 +166,11 @@ function buildSliceSuccessResponse(context) {
         originalModelInfo,
         modelBoundsValidation,
         buildVolumeLimits,
-        stats
+        stats,
+        quantity: rawQuantity
     } = context;
 
-    const { hourlyRate, totalPrice } = calculateSlicePricing(technology, material, stats);
+    const { hourlyRate, totalPrice, quantity, breakdown } = calculateSlicePricing(technology, material, stats, rawQuantity);
     const profiles = resolveProfileMapper(engine)(context);
 
     return {
@@ -134,6 +204,8 @@ function buildSliceSuccessResponse(context) {
             source_profile: buildVolumeLimits.sourceProfile
         },
         hourly_rate: hourlyRate,
+        quantity,
+        price_breakdown: breakdown,
         stats: {
             ...stats,
             estimated_price_huf: totalPrice

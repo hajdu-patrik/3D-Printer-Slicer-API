@@ -163,8 +163,63 @@ function getRate(technology, material) {
     return pricingCatalog.getRate(technology, material);
 }
 
+/**
+ * Get material cost per unit (HUF/g FDM, HUF/ml SLA); 0 when unset.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @param {string} material Material key.
+ * @returns {number} Cost per unit.
+ */
+function getMaterialCost(technology, material) {
+    return pricingCatalog.getMaterialCost(technology, material);
+}
+
+/**
+ * Set material cost per unit for an existing material key.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @param {string} materialKey Material key.
+ * @param {number} value Cost per unit in HUF.
+ * @returns {void}
+ */
+function setMaterialCost(technology, materialKey, value) {
+    pricingCatalog.setMaterialCost(technology, materialKey, value);
+}
+
+/**
+ * Remove material cost entry.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @param {string} materialKey Material key.
+ * @returns {void}
+ */
+function clearMaterialCost(technology, materialKey) {
+    pricingCatalog.clearMaterialCost(technology, materialKey);
+}
+
+/**
+ * Get flat setup fee for technology.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @returns {number} Setup fee in HUF.
+ */
+function getSetupFee(technology) {
+    return pricingCatalog.getSetupFee(technology);
+}
+
+/**
+ * Set flat setup fee for technology.
+ * @param {'FDM' | 'SLA'} technology Technology namespace.
+ * @param {number} value Setup fee in HUF.
+ * @returns {void}
+ */
+function setSetupFee(technology, value) {
+    pricingCatalog.setSetupFee(technology, value);
+}
+
 module.exports = {
     DEFAULT_PRICING,
+    getMaterialCost,
+    setMaterialCost,
+    clearMaterialCost,
+    getSetupFee,
+    setSetupFee,
     loadPricingFromDisk,
     savePricingToDisk,
     getPricing,

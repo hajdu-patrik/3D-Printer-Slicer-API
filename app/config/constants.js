@@ -70,7 +70,7 @@ const DEFAULT_PRICING = {
  * @type {{FDM: {x: number, y: number, z: number}, SLA: {x: number, y: number, z: number}}}
  */
 const MAX_BUILD_VOLUMES = {
-    FDM: { x: 250, y: 210, z: 210 },
+    FDM: { x: 256, y: 256, z: 256 },
     SLA: { x: 120, y: 120, z: 150 }
 };
 

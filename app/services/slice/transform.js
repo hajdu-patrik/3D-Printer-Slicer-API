@@ -4,7 +4,7 @@
 
 const { PYTHON_EXECUTABLE } = require('../../config/python');
 const { runCommand } = require('./command');
-const { getModelInfo } = require('./model-stats');
+const { parsePreprocessResult } = require('./input-processing');
 const { validateModelDimensionsAgainstLimits } = require('./profiles');
 const { roundDimensions } = require('./common');
 
@@ -155,28 +155,24 @@ function buildModelTransformPlan(modelInfo, transformOptions) {
 }
 
 /**
- * Execute Python-based scale/rotation transform for STL model.
+ * Execute Python-based scale/rotation transform (single process, returns new geometry stats).
  * @param {string} inputPath Input STL path.
  * @param {{scale: {x: number, y: number, z: number}, rotationDeg: {x: number, y: number, z: number}}} transformPlan Transform plan.
  * @param {string[]} filesCleanupList Cleanup collector.
- * @returns {Promise<string>} Transformed STL path.
+ * @returns {Promise<{transformedPath: string, modelInfo: {x: number, y: number, z: number, height_mm: number, volume_mm3: number, surface_area_mm2: number, is_watertight: boolean, triangle_count: number}}>} Transformed file and stats.
  */
 async function applyModelTransform(inputPath, transformPlan, filesCleanupList) {
     const transformedPath = inputPath.replace(/\.stl$/i, `_scaled_${Date.now()}.stl`);
     filesCleanupList.push(transformedPath);
 
-    const args = [
-        transformPlan.scale.x,
-        transformPlan.scale.y,
-        transformPlan.scale.z,
-        transformPlan.rotationDeg.x,
-        transformPlan.rotationDeg.y,
-        transformPlan.rotationDeg.z
-    ].map((value) => Number.parseFloat(value).toString());
+    const fmt = (value) => Number.parseFloat(value).toString();
+    const { stdout } = await runCommand(PYTHON_EXECUTABLE, [
+        'preprocess.py', 'transform', inputPath, transformedPath,
+        '--scale', fmt(transformPlan.scale.x), fmt(transformPlan.scale.y), fmt(transformPlan.scale.z),
+        '--rotate', fmt(transformPlan.rotationDeg.x), fmt(transformPlan.rotationDeg.y), fmt(transformPlan.rotationDeg.z)
+    ]);
 
-    await runCommand(PYTHON_EXECUTABLE, ['scale_model.py', inputPath, transformedPath, ...args]);
-
-    return transformedPath;
+    return { transformedPath, modelInfo: parsePreprocessResult(stdout) };
 }
 
 /**
@@ -213,13 +209,12 @@ async function applyTransformAndValidateModel(
     const transformPlan = transformPlanResult.plan;
 
     let transformedFilePath = processableFile;
+    let effectiveModelInfo = originalModelInfo;
     if (transformPlan.requiresTransform) {
-        transformedFilePath = await applyModelTransform(processableFile, transformPlan, filesCleanupList);
+        const transformed = await applyModelTransform(processableFile, transformPlan, filesCleanupList);
+        transformedFilePath = transformed.transformedPath;
+        effectiveModelInfo = transformed.modelInfo;
     }
-
-    const effectiveModelInfo = transformPlan.requiresTransform
-        ? await getModelInfo(transformedFilePath)
-        : originalModelInfo;
 
     const hasKnownFinalDimensions = [effectiveModelInfo.x, effectiveModelInfo.y, effectiveModelInfo.z]
         .every((value) => Number.parseFloat(value) > 0);

@@ -331,6 +331,51 @@ function parseTransformOptions(body) {
 }
 
 /**
+ * Parse optional autoOrient flag (default true).
+ * @param {Record<string, unknown>} body Request payload.
+ * @returns {{isValid: true, value: boolean} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
+ */
+function parseAutoOrient(body) {
+    const raw = pickFirstNonEmptyValue(body, ['autoOrient']);
+    if (raw === undefined) return { isValid: true, value: true };
+    const parsed = parseBooleanLike(raw);
+    if (parsed === null) {
+        return {
+            isValid: false,
+            response: {
+                success: false,
+                error: 'Invalid autoOrient value. Allowed values: true/false.',
+                errorCode: 'INVALID_AUTO_ORIENT'
+            }
+        };
+    }
+    return { isValid: true, value: parsed };
+}
+
+/**
+ * Parse optional quantity (integer 1..1000, default 1).
+ * @param {Record<string, unknown>} body Request payload.
+ * @returns {{isValid: true, value: number} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
+ */
+function parseQuantity(body) {
+    const raw = pickFirstNonEmptyValue(body, ['quantity']);
+    if (raw === undefined) return { isValid: true, value: 1 };
+    const text = String(raw).trim();
+    const parsed = /^\d+$/.test(text) ? Number.parseInt(text, 10) : Number.NaN;
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
+        return {
+            isValid: false,
+            response: {
+                success: false,
+                error: 'Invalid quantity value. Allowed values: integer from 1 to 1000.',
+                errorCode: 'INVALID_QUANTITY'
+            }
+        };
+    }
+    return { isValid: true, value: parsed };
+}
+
+/**
  * Parse and validate full slicing option set from request body.
  * @param {Record<string, unknown>} body Request payload.
  * @param {'FDM'|'SLA'|null} forcedTechnology Endpoint-forced technology.
@@ -363,6 +408,16 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
             isValid: false,
             response: transformOptionsResult.response
         };
+    }
+
+    const autoOrientResult = parseAutoOrient(input);
+    if (!autoOrientResult.isValid) {
+        return { isValid: false, response: autoOrientResult.response };
+    }
+
+    const quantityResult = parseQuantity(input);
+    if (!quantityResult.isValid) {
+        return { isValid: false, response: quantityResult.response };
     }
 
     const profileOverridesResult = parseProfileOverrides(input, engine);
@@ -404,6 +459,8 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
             infillPercentage,
             technology,
             transformOptions: transformOptionsResult.options,
+            autoOrient: autoOrientResult.value,
+            quantity: quantityResult.value,
             profileOverrides: profileOverridesResult.profileOverrides
         }
     };

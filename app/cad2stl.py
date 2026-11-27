@@ -29,6 +29,39 @@ def _check_not_html(path):
             "The uploaded file is not a valid CAD file. Please upload the original CAD export file."
         )
 
+# Tessellation quality: curvature-adaptive sizing relative to the part size.
+ELEMENTS_PER_FULL_CIRCLE = 24      # Mesh.MeshSizeFromCurvature: elements per 2*pi of curvature
+MAX_SIZE_DIAGONAL_DIVISOR = 20.0   # MeshSizeMax = bounding-box diagonal / 20
+MIN_SIZE_DIAGONAL_DIVISOR = 2000.0  # MeshSizeMin = bounding-box diagonal / 2000
+
+
+def _disable_geometry_healing():
+    """Keep gmsh OCC import free of any automatic shape healing (source fidelity)."""
+    for option in (
+        "Geometry.OCCFixDegenerated",
+        "Geometry.OCCFixSmallEdges",
+        "Geometry.OCCFixSmallFaces",
+        "Geometry.OCCSewFaces",
+        "Geometry.OCCMakeSolids",
+    ):
+        gmsh.option.setNumber(option, 0)
+
+
+def _apply_adaptive_mesh_sizes():
+    """Set mesh sizes from the model bounding box and surface curvature."""
+    min_x, min_y, min_z, max_x, max_y, max_z = gmsh.model.getBoundingBox(-1, -1)
+    diagonal = ((max_x - min_x) ** 2 + (max_y - min_y) ** 2 + (max_z - min_z) ** 2) ** 0.5
+    if diagonal <= 0:
+        raise ValueError("The CAD model has an empty bounding box.")
+
+    gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", ELEMENTS_PER_FULL_CIRCLE)
+    gmsh.option.setNumber("Mesh.MeshSizeMax", diagonal / MAX_SIZE_DIAGONAL_DIVISOR)
+    gmsh.option.setNumber("Mesh.MeshSizeMin", diagonal / MIN_SIZE_DIAGONAL_DIVISOR)
+    # Size comes from curvature and bounding box only, not from point/boundary sizes.
+    gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
+    gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 1)
+
+
 def convert_cad_to_stl(input_path, output_path):
     """Convert a CAD file to STL format.
 
@@ -71,6 +104,8 @@ def convert_cad_to_stl(input_path, output_path):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("General.Verbosity", 2)
 
+        _disable_geometry_healing()
+
         # 3. Loading and merging
         print("[PYTHON CAD] Merging file...")
         gmsh.merge(temp_igs_path)
@@ -79,8 +114,7 @@ def convert_cad_to_stl(input_path, output_path):
         gmsh.model.occ.synchronize()
 
         # 5. Exporting to STL
-        gmsh.option.setNumber("Mesh.MeshSizeMin", 0.5)
-        gmsh.option.setNumber("Mesh.MeshSizeMax", 5.0)
+        _apply_adaptive_mesh_sizes()
 
         gmsh.model.mesh.generate(2)
         

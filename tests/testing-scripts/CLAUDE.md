@@ -1,10 +1,14 @@
 # Testing Scripts - Local Claude Guide
 
-Last synchronized: 2026-05-14
+Last synchronized: 2026-11-27
 
 ## Scope
 
 This folder contains API-level Python integration and workflow tests.
+
+## Fast Pre-Check
+
+Before running Python runners, run the Node unit suite from the repository root: `npm test` (`node --test` on tests/unit/*.test.js). It needs no running API.
 
 ## Main Runner Groups
 
@@ -44,6 +48,7 @@ After execution, always read the generated markdown report file.
 ## Execution Policy
 
 - Prefer Docker-based API runtime for integration validations.
+- Repeated identical slice requests now return `cache_hit: true` (and create no new output file) unless SLICE_RESULT_CACHE_TTL_MS=0; set it to 0 for runs that must exercise the slicer every time.
 - Keep test runners deterministic and avoid changing endpoint contracts through tests.
 
 ## Runtime Inputs

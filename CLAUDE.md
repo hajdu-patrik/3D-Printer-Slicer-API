@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Operating Guide
 
-Last synchronized: 2026-11-26
+Last synchronized: 2026-11-27
 
 ## Architecture Notice
 Claude is the primary agentic tool for this repository. Guidance lives in Markdown guides only;
@@ -31,13 +31,15 @@ Do not introduce app/input, app/output, or app/configs.
 ## Main Data Flow
 1. Receive multipart upload (field name: choosenFile).
 2. Validate extension and request options.
-3. Apply rate limit and enqueue in FIFO queue.
-4. Convert source to STL when needed.
-5. Run orientation optimization.
-6. Apply transform/scale/rotation and bounds validation.
-7. Slice with selected engine/profile.
-8. Parse generated output stats.
-9. Return stats and calculated price.
+3. Apply rate limit, run the queue pre-check (SLICE_QUEUE_FULL / SLICE_QUEUE_CLIENT_LIMIT before the upload body is accepted), then enqueue in FIFO queue.
+4. Convert source to STL when needed (STEP/IGES via cad2stl.py first).
+5. Preprocess via app/preprocess.py (single Python call: STL normalization, optional orientation when `autoOrient` is true, geometry metrics).
+6. Apply transform/scale/rotation (preprocess.py `transform` mode) and bounds validation.
+7. Slice with selected engine/profile (material overlay merged into the runtime profile).
+8. Parse generated output stats (G-code head/tail metadata, SL1 config.ini).
+9. Return stats, `price_breakdown` and calculated price; identical requests may be served from the result cache (`cache_hit`).
+
+Async variant: POST /prusa/slice/jobs and /orca/slice/jobs return 202 `{success, jobId, status:'queued', statusUrl}`; GET /slice/jobs/:jobId reports `queued|processing|done{result}|failed{error:{status, body}}`.
 
 ## API Endpoint Snapshot
 Public endpoints:
@@ -45,18 +47,37 @@ Public endpoints:
 - GET /pricing
 - POST /prusa/slice
 - POST /orca/slice
+- POST /prusa/slice/jobs
+- POST /orca/slice/jobs
+- GET /slice/jobs/:jobId
 - GET /openapi.json
 - GET /docs
 - GET /
 
 Admin-protected endpoints (x-api-key required):
 - GET /health/detailed
+- GET /metrics
 - POST /pricing/FDM
 - POST /pricing/SLA
+- PUT /pricing/:technology/setup-fee
 - PATCH /pricing/:technology/:material
 - DELETE /pricing/:technology/:material
 - GET /admin/output-files
 - GET /admin/download/:fileName
+
+## Preprocessing, Stats and Pricing
+- app/preprocess.py has modes `preprocess` and `transform` and prints a `@@RESULT@@{json}` line (x, y, z, volume_mm3, surface_area_mm2, is_watertight, triangle_count); at most 2 Python spawns per request; `prusa-slicer --info` is no longer used for dimensions.
+- app/orient.py scores orientation candidates overhang-aware; cad2stl.py uses curvature-adaptive meshing with OCC healing options explicitly off.
+- Request options: `autoOrient` (bool, default true, INVALID_AUTO_ORIENT) and `quantity` (int 1..1000, default 1, INVALID_QUANTITY).
+- SLA print time/material come from `.sl1` config.ini (`printTime`, `usedMaterial`), heuristic only as fallback; FDM time prefers seconds-accurate G-code comments over M73; G-code is read head/tail 256 KB only (app/services/slice/gcode-metadata.js, sla-stats.js).
+- Price per request: `ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit)) / 10) * 10` (HUF). materialAmount is grams for FDM and millilitres for SLA.
+- Optional pricing.json sections `materialCost` (`FDM`: HUF/g, `SLA`: HUF/ml per material) and `setupFee` (`FDM`/`SLA` flat HUF per order); files without them stay valid (cost 0).
+- Admin pricing API accepts optional `materialCostPerUnit` on POST /pricing/FDM|SLA and PATCH /pricing/:technology/:material (`price` is optional on PATCH when `materialCostPerUnit` is given); PUT /pricing/:technology/setup-fee takes `{setupFee}`.
+- GET /pricing returns the hourly maps plus `materialCost` and `setupFee`.
+- Slice responses add `quantity`, `price_breakdown`, `cache_hit` and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
+- Result cache (app/services/slice/result-cache.js): key is SHA-256 of file bytes + engine + options except `quantity` + profile/material file mtime/size; hits return `cache_hit: true`, recompute price, and create no new output file. `SLICE_RESULT_CACHE_TTL_MS=0` disables it.
+- Output retention sweep (app/services/output-retention.service.js) removes old output artifacts and stale upload temp files (OUTPUT_RETENTION_HOURS, UPLOAD_TEMP_RETENTION_MINUTES, OUTPUT_CLEANUP_INTERVAL_MS).
+- GET /metrics (admin) exposes Prometheus text metrics.
 
 ## Security and Validation Rules
 - ADMIN_API_KEY must exist or server startup is refused.
@@ -80,6 +101,7 @@ Defaults:
 - Max queue length: 100
 - Max queued+active slice jobs per client IP: 5
 - Max queue wait: 300000 ms
+- Job status polling: 60 requests per 60 seconds per IP (JOB_POLL_RATE_LIMIT_EXCEEDED)
 - Slice command timeout: 600000 ms (10 minutes)
 - ZIP entry limit: 500 files
 - ZIP cumulative size limit: 500 MB
@@ -98,6 +120,8 @@ Return and preserve queue/rate errors:
 - SLICE_QUEUE_CLIENT_LIMIT
 - SLICE_QUEUE_TIMEOUT
 - FILE_PROCESSING_TIMEOUT
+- JOB_POLL_RATE_LIMIT_EXCEEDED (HTTP 429)
+- JOB_STORE_FULL (HTTP 503), JOB_NOT_FOUND (404), INVALID_JOB_ID (400)
 
 ## Python Runtime Resolution
 - PYTHON_EXECUTABLE (optional) must be an absolute path and must exist when provided.
@@ -110,12 +134,16 @@ Return and preserve queue/rate errors:
 Prusa:
 - SLA layer heights: 0.025, 0.05
 - FDM layer heights: 0.1, 0.2, 0.3
+- `--center` is computed from the profile bed_shape (fallback 100,100).
+- Material overlays configs/prusa/materials/FDM_<MAT>.ini and SLA_<MAT>_<layer>mm.ini are merged into the runtime profile (safe-name check; unknown material falls back to the base profile).
+- FDM Prusa profiles use a 256x256 bed with max_print_height 256 (FDM fallback build volume 256x256x256); SLA profiles use 120x120 bed and max_print_height 150.
 
 Orca:
 - FDM only
 - Allowed layer heights: 0.1, 0.2, 0.3
 - Requires machine profile + process profile compatibility
 - Uses per-request isolated output directories before final artifact alignment.
+- Runs with `--arrange 1 --orient 0` (orientation is done once by orient.py) and `--load-filaments` with configs/orca/materials/FDM_<MAT>.json.
 
 ## Configuration Keys
 Core keys from .env:
@@ -146,6 +174,15 @@ Core keys from .env:
 - ORCA_PROCESS_PROFILE_0_3
 - TRUST_PROXY
 - TRUST_PROXY_CIDRS
+- JOB_RESULT_TTL_MS
+- JOB_MAX_ENTRIES
+- JOB_POLL_RATE_LIMIT_WINDOW_MS
+- JOB_POLL_RATE_LIMIT_MAX_REQUESTS
+- SLICE_RESULT_CACHE_TTL_MS
+- SLICE_RESULT_CACHE_MAX_ENTRIES
+- OUTPUT_RETENTION_HOURS
+- UPLOAD_TEMP_RETENTION_MINUTES
+- OUTPUT_CLEANUP_INTERVAL_MS
 - SLICER_BASE_URL
 
 ## Testing Policy
@@ -166,13 +203,15 @@ Focused suites:
 - python tests/testing-scripts/rate_limit/rate_limit_regression_test_runner.py
 - python tests/testing-scripts/queue/queue_concurrency_test_runner.py --count <N> --retry-on-429 3
 
+Unit suite: `npm test` (Node `node --test` on tests/unit/*.test.js) is the fast pre-check and also runs in CI. Repeated identical slice requests now return `cache_hit: true` unless SLICE_RESULT_CACHE_TTL_MS=0.
+
 Test organization:
 - Keep focused runners small and domain-specific (admin output, rate-limit, queue, pricing).
 - Split oversized runners into focused suites instead of appending unrelated checks.
 - Preserve stable, deterministic runners unless changed endpoint behavior requires updates.
 
 ## Workflow Gates
-- Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
+- Run fast syntax validation (`node --check`, `python -m py_compile`) and the Node unit suite (`npm test`, runs `node --test` on tests/unit/*.test.js) before integration suites when source files change.
 - Review non-trivial source changes against OOP/SOLID and the decomposition guardrails before running integration suites.
 - Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
 - Update the Markdown guides last, keeping every file in the Documentation Scope Map consistent.

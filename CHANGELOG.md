@@ -2,7 +2,41 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## v3.2.0 (2026-11-27)
+
+### Added
+
+- Pricing by material and setup fee: optional `materialCost` (HUF per gram for FDM, per ml for SLA) and `setupFee` sections in `pricing.json`. Price = `ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + material * materialCostPerUnit)) / 10) * 10`. Old pricing files with no new settings produce exactly the same prices as before. New request field `quantity` (1..1000, `INVALID_QUANTITY`); the response now includes `quantity` and `price_breakdown`. Admin API: optional `materialCostPerUnit` on `POST /pricing/FDM|SLA` and `PATCH /pricing/:technology/:material`, and the new `PUT /pricing/:technology/setup-fee`.
+- Async slice jobs: `POST /prusa/slice/jobs`, `POST /orca/slice/jobs` (202 + `jobId`) and `GET /slice/jobs/:jobId` (rate-limited polling; `INVALID_JOB_ID`, `JOB_NOT_FOUND`, `JOB_STORE_FULL`, `JOB_POLL_RATE_LIMIT_EXCEEDED`). The sync endpoints are unchanged.
+- Result cache (LRU + TTL) keyed by the file hash, the slicing options and the profile files; `quantity` is not part of the key. Responses include `cache_hit`, and the price is recalculated on every cache hit.
+- Admin `GET /metrics` in Prometheus text format (queue, slices, durations, cache, jobs).
+- Output retention: old `.gcode`/`.sl1` files, stale Orca output directories and leftover upload temp files are cleaned up periodically.
+- New request option `autoOrient` (default true; `INVALID_AUTO_ORIENT`).
+- New stats fields: `print_time_source`, `material_used_g`, `material_used_ml`.
+- Material profile overlays: `configs/prusa/materials/` and `configs/orca/materials/` (filament JSON via `--load-filaments`). Each material is now sliced with its own settings instead of the PLA profile.
+- Node unit test suite: `tests/unit/` (39 tests, `npm test`), also run in CI.
+- New env keys: `JOB_RESULT_TTL_MS`, `JOB_MAX_ENTRIES`, `JOB_POLL_RATE_LIMIT_WINDOW_MS`, `JOB_POLL_RATE_LIMIT_MAX_REQUESTS`, `SLICE_RESULT_CACHE_TTL_MS`, `SLICE_RESULT_CACHE_MAX_ENTRIES`, `OUTPUT_RETENTION_HOURS`, `UPLOAD_TEMP_RETENTION_MINUTES`, `OUTPUT_CLEANUP_INTERVAL_MS`.
+
+### Changed
+
+- SLA print time and resin usage now come from the real `printTime` / `usedMaterial` values in the `.sl1` `config.ini`; the per-layer heuristic is only a fallback.
+- FDM print time prefers the slicer's seconds-accurate time comments over `M73` (minute resolution). Only the first and last 256 KB of the G-code are read.
+- Preprocessing: the new `app/preprocess.py` handles loading, orientation and transform in at most 2 Python processes per request. Dimensions come from trimesh, so `prusa-slicer --info` is no longer called.
+- Orientation scoring now accounts for overhangs (support area). Orca no longer re-orients the model (`--orient 0`).
+- Prusa `--center` is computed from the profile's `bed_shape` (previously hardcoded `100,100`). The FDM profiles and the fallback build volume are aligned to 256x256x256.
+- CAD conversion uses curvature-adaptive meshing scaled to the part size; OCC healing options are explicitly off.
+- The queue capacity check now runs before the upload, so a full queue returns `SLICE_QUEUE_FULL` / `SLICE_QUEUE_CLIENT_LIMIT` before the file is received.
+- `requirements.txt` pins exact versions.
+- Behaviour change: print times for TPU, PETG and ABS differ from before because each material now uses its own profile. The 0.1/0.3 mm FDM profiles now allow models up to 256 mm (previously 220 mm).
+
+### Fixed
+
+- After the merge, PLY input was being sent to the CAD converter; it now goes through the mesh path again (`INVALID_SOURCE_GEOMETRY` for corrupt PLY files).
+- An empty STL keeps returning 422 `MODEL_DIMENSIONS_UNAVAILABLE`.
+
+### Validation (v3.2.0)
+
+- Rebuilt the Docker image and ran all runners green: `full_api_test_runner` (21/21: Prusa FDM, Prusa SLA, Orca FDM with STL/OBJ/3MF/PLY/ZIP/STEP inputs), `unsupported_upload` (2/2), `invalid_geometry` (5/5), `pricing_cycle` (12/12), `admin_output_files`, `rate_limit_regression`, `queue_concurrency` (4/4), plus `npm test` (39/39).
 
 ### Dependencies
 
@@ -35,7 +69,7 @@ All notable changes to this project are documented in this file.
 
 ### Notes
 
-- The agentic-asset retirement changed no source file, test runner, dependency, or configuration key. The dependency and CI/CD changes above are not tagged as a release yet, so `package.json` stays at `3.1.5`.
+- The agentic-asset retirement changed no source file, test runner, dependency, or configuration key. The dependency and CI/CD changes above ship in the v3.2.0 release.
 
 ## v3.1.5 (2026-09-22)
 

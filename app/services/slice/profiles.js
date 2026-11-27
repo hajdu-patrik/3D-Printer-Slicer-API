@@ -72,7 +72,7 @@ function resolveOrcaMachineConfigPath(profileOverrides = {}) {
 /**
  * Parse planar coordinate list into rectangular X/Y dimensions.
  * @param {unknown[]} rawPoints Planar point list.
- * @returns {{x: number, y: number} | null} Parsed planar dimensions or null.
+ * @returns {{x: number, y: number, centerX: number, centerY: number} | null} Parsed planar dimensions and center, or null.
  */
 function parsePlanarCoordinates(rawPoints) {
     if (!Array.isArray(rawPoints) || rawPoints.length === 0) return null;
@@ -103,7 +103,7 @@ function parsePlanarCoordinates(rawPoints) {
     const depth = maxY - minY;
     if (width <= 0 || depth <= 0) return null;
 
-    return { x: width, y: depth };
+    return { x: width, y: depth, centerX: (minX + maxX) / 2, centerY: (minY + maxY) / 2 };
 }
 
 /**
@@ -366,16 +366,80 @@ function upsertIniKey(content, key, value) {
 }
 
 /**
+ * Resolve Prusa bed center (mm) from the profile bed_shape.
+ * @param {string} configPath Prusa profile path.
+ * @returns {{x: number, y: number} | null} Bed center or null when bed_shape is missing/unparsable.
+ */
+function resolvePrusaBedCenter(configPath) {
+    if (!configPath || !fs.existsSync(configPath)) return null;
+
+    const bedShapeRaw = readIniKeyValues(configPath).bed_shape;
+    if (!bedShapeRaw) return null;
+
+    const bedShape = parsePlanarCoordinates(String(bedShapeRaw).split(','));
+    return bedShape ? { x: bedShape.centerX, y: bedShape.centerY } : null;
+}
+
+const MATERIAL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
+ * Resolve optional material overlay file for engine/technology/material.
+ * SLA overlays may be layer-specific (`SLA_<material>_<layer>mm.ini`) and are preferred over `SLA_<material>.ini`.
+ * Unknown or unsafe material names resolve to null (base profile unchanged).
+ * @param {'prusa'|'orca'} engine Slicer engine key.
+ * @param {'FDM'|'SLA'} technology Active technology.
+ * @param {string | null | undefined} material Requested material.
+ * @param {number | string} [layerHeight] Requested layer height.
+ * @returns {string | null} Absolute overlay path or null.
+ */
+function resolveMaterialOverlayPath(engine, technology, material, layerHeight) {
+    const name = String(material || '').trim();
+    if (!MATERIAL_NAME_PATTERN.test(name)) return null;
+
+    const baseDir = path.join(engine === 'orca' ? ORCA_CONFIGS_DIR : PRUSA_CONFIGS_DIR, 'materials');
+    const extension = engine === 'orca' ? 'json' : 'ini';
+    const candidates = [];
+    if (layerHeight !== undefined && layerHeight !== null && Number.isFinite(Number.parseFloat(layerHeight))) {
+        candidates.push(`${technology}_${name}_${layerHeight}mm.${extension}`);
+    }
+    candidates.push(`${technology}_${name}.${extension}`);
+
+    for (const candidate of candidates) {
+        const candidatePath = path.join(baseDir, candidate);
+        if (path.dirname(candidatePath) === baseDir && fs.existsSync(candidatePath)) return candidatePath;
+    }
+    return null;
+}
+
+/**
+ * Resolve Orca filament overlay path for --load-filaments (FDM only).
+ * @param {string | null | undefined} material Requested material.
+ * @returns {string | null} Absolute filament JSON path or null when no overlay exists.
+ */
+function resolveOrcaFilamentConfigPath(material) {
+    return resolveMaterialOverlayPath('orca', 'FDM', material);
+}
+
+/**
  * Create temporary Prusa runtime profile with request-time overrides.
  * @param {string} baseConfigPath Source profile path.
  * @param {'FDM'|'SLA'} technology Active technology.
  * @param {number} layerHeight Requested layer height.
  * @param {string} infillPercentage Infill override.
  * @param {string[]} filesCleanupList Cleanup collector.
+ * @param {string | null} [material=null] Optional material whose overlay is merged into the profile.
  * @returns {string} Runtime profile path.
  */
-function createPrusaRuntimeProfile(baseConfigPath, technology, layerHeight, infillPercentage, filesCleanupList) {
+function createPrusaRuntimeProfile(baseConfigPath, technology, layerHeight, infillPercentage, filesCleanupList, material = null) {
     let iniContent = fs.readFileSync(baseConfigPath, 'utf8');
+
+    const overlayPath = resolveMaterialOverlayPath('prusa', technology, material, layerHeight);
+    if (overlayPath) {
+        for (const [key, value] of Object.entries(readIniKeyValues(overlayPath))) {
+            iniContent = upsertIniKey(iniContent, key, value);
+        }
+    }
+
     iniContent = upsertIniKey(iniContent, 'layer_height', `${layerHeight}`);
 
     if (technology === 'FDM') {
@@ -397,14 +461,15 @@ function createPrusaRuntimeProfile(baseConfigPath, technology, layerHeight, infi
  * @param {number} layerHeight Requested layer height.
  * @param {string} infillPercentage Infill override.
  * @param {string[]} filesCleanupList Cleanup collector.
+ * @param {string | null} [material=null] Optional material; Prusa merges its overlay here, Orca uses resolveOrcaFilamentConfigPath instead.
  * @returns {string} Runtime profile path.
  */
-function createRuntimeSlicerProfile(engine, baseConfigFile, technology, layerHeight, infillPercentage, filesCleanupList) {
+function createRuntimeSlicerProfile(engine, baseConfigFile, technology, layerHeight, infillPercentage, filesCleanupList, material = null) {
     if (engine === 'orca') {
         return createOrcaRuntimeProcessProfile(baseConfigFile, layerHeight, infillPercentage, filesCleanupList);
     }
 
-    return createPrusaRuntimeProfile(baseConfigFile, technology, layerHeight, infillPercentage, filesCleanupList);
+    return createPrusaRuntimeProfile(baseConfigFile, technology, layerHeight, infillPercentage, filesCleanupList, material);
 }
 
 /**
@@ -486,6 +551,9 @@ module.exports = {
     resolveConfigPath,
     resolveOrcaMachineConfigPath,
     resolveBuildVolumeLimits,
+    resolvePrusaBedCenter,
+    resolveMaterialOverlayPath,
+    resolveOrcaFilamentConfigPath,
     validateModelDimensionsAgainstLimits,
     createRuntimeSlicerProfile,
     resolveProfileSelection,

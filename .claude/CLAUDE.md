@@ -1,6 +1,6 @@
 # 3D Printer Slicer API - Claude Instructions
 
-Last synchronized: 2026-11-26
+Last synchronized: 2026-11-27
 
 ## Architecture Notice
 Claude is the primary agentic tool for this repository. Guidance lives in Markdown guides only;
@@ -22,7 +22,9 @@ Keep slicing behavior safe, deterministic, and production-friendly while preserv
 - Docker Compose runtime
 
 ## Data Flow
-Request upload -> option validation -> IP rate limit -> FIFO queue -> converter/orientation -> transform/bounds check -> slicer execution -> output parsing -> pricing response.
+Request upload -> IP rate limit -> queue pre-check -> upload -> option validation -> FIFO queue -> converter -> preprocess.py (normalize, optional orientation, metrics) -> transform/bounds check -> slicer execution -> output parsing -> pricing response (result cache may short-circuit with `cache_hit: true`).
+
+Async variant: POST /prusa/slice/jobs and /orca/slice/jobs return 202 `{success, jobId, status:'queued', statusUrl}`; GET /slice/jobs/:jobId returns `queued|processing|done{result}|failed{error:{status, body}}`.
 
 ## Endpoint Reference
 Public endpoints:
@@ -30,14 +32,19 @@ Public endpoints:
 - GET /pricing
 - POST /prusa/slice
 - POST /orca/slice
+- POST /prusa/slice/jobs
+- POST /orca/slice/jobs
+- GET /slice/jobs/:jobId
 - GET /openapi.json
 - GET /docs
 - GET /
 
 Admin endpoints (x-api-key required):
 - GET /health/detailed
+- GET /metrics
 - POST /pricing/FDM
 - POST /pricing/SLA
+- PUT /pricing/:technology/setup-fee
 - PATCH /pricing/:technology/:material
 - DELETE /pricing/:technology/:material
 - GET /admin/output-files
@@ -49,6 +56,19 @@ Admin endpoints (x-api-key required):
 - Fail-fast on invalid geometry with INVALID_SOURCE_GEOMETRY.
 - Do not auto-repair or mutate invalid user geometry.
 - Keep queue and rate-limiting active for slicing.
+
+## Preprocessing, Stats and Pricing
+- app/preprocess.py (modes `preprocess`, `transform`) emits `@@RESULT@@{json}` geometry metrics; at most 2 Python spawns per request; `prusa-slicer --info` no longer used for dimensions.
+- orient.py is overhang-aware; cad2stl.py uses curvature-adaptive meshing with OCC healing off (no-healing policy unchanged).
+- Request options: `autoOrient` (default true, INVALID_AUTO_ORIENT), `quantity` (1..1000, default 1, INVALID_QUANTITY).
+- SLA time/material from `.sl1` config.ini (`printTime`, `usedMaterial`), heuristic fallback only; FDM prefers seconds-accurate comments over M73; G-code read head/tail 256 KB only.
+- Price per request: `ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit)) / 10) * 10` (HUF). materialAmount is grams for FDM and millilitres for SLA.
+- Optional pricing.json sections `materialCost` (`FDM`: HUF/g, `SLA`: HUF/ml per material) and `setupFee` (`FDM`/`SLA` flat HUF per order); files without them stay valid (cost 0).
+- Admin pricing API accepts optional `materialCostPerUnit` on POST /pricing/FDM|SLA and PATCH /pricing/:technology/:material (`price` is optional on PATCH when `materialCostPerUnit` is given); PUT /pricing/:technology/setup-fee takes `{setupFee}`.
+- GET /pricing returns the hourly maps plus `materialCost` and `setupFee`.
+- Slice responses add `quantity`, `price_breakdown`, `cache_hit` and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
+- Result cache key: SHA-256 of file + options except `quantity` + profile/material file mtime/size; `SLICE_RESULT_CACHE_TTL_MS=0` disables it.
+- Output retention sweep and admin GET /metrics (Prometheus text) are active.
 
 ## Security
 - ADMIN_API_KEY must be configured to start API.
@@ -65,12 +85,15 @@ Admin endpoints (x-api-key required):
 ## Engine Constraints
 Prusa:
 - Supports layer heights: 0.025, 0.05, 0.1, 0.2, 0.3
+- `--center` computed from profile bed_shape (fallback 100,100); material overlays configs/prusa/materials/ merged into the runtime profile (unknown material -> base profile).
+- FDM profiles: 256x256 bed, max_print_height 256 (fallback build volume 256x256x256); SLA: 120x120 bed, max_print_height 150.
 
 Orca:
 - FDM only
 - Supports layer heights: 0.1, 0.2, 0.3
 - Requires compatible machine/process profile pairing
 - Uses per-request isolated output directories before final output-file alignment.
+- Runs with `--arrange 1 --orient 0` and `--load-filaments` configs/orca/materials/FDM_<MAT>.json.
 
 ## Queue and Rate Defaults
 - Slice rate limit: 3 requests per minute per IP
@@ -79,6 +102,7 @@ Orca:
 - MAX_SLICE_QUEUE_LENGTH: 100
 - MAX_SLICE_QUEUE_PER_IP: 5
 - MAX_SLICE_QUEUE_WAIT_MS: 300000
+- Job status polling: 60 requests per minute per IP
 - Slice timeout: 600000 ms
 - MAX_ZIP_ENTRIES: 500
 - MAX_ZIP_UNCOMPRESSED_BYTES: 524288000
@@ -89,6 +113,8 @@ Queue and rate behavior:
 - SLICE_QUEUE_FULL returns HTTP 503.
 - SLICE_QUEUE_CLIENT_LIMIT returns HTTP 429.
 - SLICE_QUEUE_TIMEOUT returns HTTP 503.
+- Queue pre-check middleware returns SLICE_QUEUE_FULL / SLICE_QUEUE_CLIENT_LIMIT before the upload body is accepted.
+- Job errors: INVALID_JOB_ID (400), JOB_NOT_FOUND (404), JOB_STORE_FULL (503), JOB_POLL_RATE_LIMIT_EXCEEDED (429).
 
 ## Python Runtime Resolution
 - PYTHON_EXECUTABLE is optional but must be an existing absolute path when set.
@@ -125,10 +151,19 @@ Queue and rate behavior:
 - ORCA_PROCESS_PROFILE_0_3
 - TRUST_PROXY
 - TRUST_PROXY_CIDRS
+- JOB_RESULT_TTL_MS
+- JOB_MAX_ENTRIES
+- JOB_POLL_RATE_LIMIT_WINDOW_MS
+- JOB_POLL_RATE_LIMIT_MAX_REQUESTS
+- SLICE_RESULT_CACHE_TTL_MS
+- SLICE_RESULT_CACHE_MAX_ENTRIES
+- OUTPUT_RETENTION_HOURS
+- UPLOAD_TEMP_RETENTION_MINUTES
+- OUTPUT_CLEANUP_INTERVAL_MS
 - SLICER_BASE_URL
 
 ## Workflow Gates
-- Run fast syntax validation (`node --check`, `python -m py_compile`) before integration suites when source files change.
+- Run fast syntax validation (`node --check`, `python -m py_compile`) and the Node unit suite (`npm test`, runs `node --test` on tests/unit/*.test.js) before integration suites when source files change.
 - Review non-trivial source changes against OOP/SOLID and the decomposition guardrails before running integration suites.
 - Run the smallest matching Python runner first; run full slicing validation when slicing behavior changes or the user explicitly asks for full validation.
 - Update the Markdown guides last, keeping every file in the Documentation Topology consistent.
@@ -139,6 +174,8 @@ Queue and rate behavior:
 - `.env` holds runtime secrets and stays untracked; `.env.example` documents the keys.
 
 ## Testing Rule
+Fast pre-check: `npm test` (Node `node --test`, tests/unit/*.test.js; also run in CI). Repeated identical slice requests return `cache_hit: true` unless SLICE_RESULT_CACHE_TTL_MS=0.
+
 After running any Python test runner in tests/testing-scripts/, always read matching markdown report in tests/testing-scripts/results/.
 
 Focused test runners:

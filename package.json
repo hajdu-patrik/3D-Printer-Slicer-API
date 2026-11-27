@@ -1,10 +1,11 @@
 {
   "name": "3d-printer-slicer-api",
-  "version": "3.1.5",
+  "version": "3.2.0",
   "main": "app/server.js",
   "scripts": {
     "start": "node app/server.js",
-    "dev": "node --watch app/server.js"
+    "dev": "node --watch app/server.js",
+    "test": "node --test \"tests/unit/**/*.test.js\""
   },
   "dependencies": {
     "archiver": "^8.0.0",

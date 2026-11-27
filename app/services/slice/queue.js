@@ -196,6 +196,24 @@ function runNextSliceJob() {
 }
 
 /**
+ * Advisory capacity check mirroring enqueueSliceJob rejections (used before uploads are accepted).
+ * Throws the same typed queue errors; the authoritative check stays inside enqueueSliceJob.
+ * @param {string} [queueKeyInput] Queue ownership key (client IP).
+ * @returns {void}
+ */
+function assertSliceQueueCapacity(queueKeyInput) {
+    const queueKey = String(queueKeyInput || 'anonymous');
+
+    if (sliceQueue.length >= MAX_SLICE_QUEUE_LENGTH) {
+        throw new SliceQueueFullError();
+    }
+
+    if (getTotalJobsForKey(queueKey) >= MAX_SLICE_QUEUE_PER_IP) {
+        throw new SliceQueueClientLimitError();
+    }
+}
+
+/**
  * Queue a slicing task and execute it when capacity becomes available.
  * @template T
  * @param {() => Promise<T>} task Async slicing task.
@@ -238,6 +256,7 @@ function getQueueStatus() {
 
 module.exports = {
     enqueueSliceJob,
+    assertSliceQueueCapacity,
     getQueueStatus,
     toQueueErrorResponse,
     SliceQueueError,

@@ -36,9 +36,9 @@
     ],
     "printable_area": [
         "0x0",
-        "250x0",
-        "250x250",
-        "0x250"
+        "256x0",
+        "256x256",
+        "0x256"
     ],
-    "printable_height": "250"
+    "printable_height": "256"
 }

@@ -1,0 +1,63 @@
+{
+    "type": "filament",
+    "name": "Local Generic PETG",
+    "from": "user",
+    "instantiation": "true",
+    "filament_settings_id": [
+        "Local Generic PETG"
+    ],
+    "filament_type": [
+        "PETG"
+    ],
+    "filament_diameter": [
+        "1.75"
+    ],
+    "filament_density": [
+        "1.27"
+    ],
+    "filament_max_volumetric_speed": [
+        "10"
+    ],
+    "nozzle_temperature": [
+        "250"
+    ],
+    "nozzle_temperature_initial_layer": [
+        "250"
+    ],
+    "cool_plate_temp": [
+        "70"
+    ],
+    "cool_plate_temp_initial_layer": [
+        "70"
+    ],
+    "eng_plate_temp": [
+        "70"
+    ],
+    "eng_plate_temp_initial_layer": [
+        "70"
+    ],
+    "hot_plate_temp": [
+        "70"
+    ],
+    "hot_plate_temp_initial_layer": [
+        "70"
+    ],
+    "textured_plate_temp": [
+        "70"
+    ],
+    "textured_plate_temp_initial_layer": [
+        "70"
+    ],
+    "fan_min_speed": [
+        "30"
+    ],
+    "fan_max_speed": [
+        "60"
+    ],
+    "slow_down_min_speed": [
+        "20"
+    ],
+    "slow_down_layer_time": [
+        "8"
+    ]
+}

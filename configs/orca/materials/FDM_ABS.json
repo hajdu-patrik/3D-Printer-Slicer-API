@@ -1,0 +1,63 @@
+{
+    "type": "filament",
+    "name": "Local Generic ABS",
+    "from": "user",
+    "instantiation": "true",
+    "filament_settings_id": [
+        "Local Generic ABS"
+    ],
+    "filament_type": [
+        "ABS"
+    ],
+    "filament_diameter": [
+        "1.75"
+    ],
+    "filament_density": [
+        "1.04"
+    ],
+    "filament_max_volumetric_speed": [
+        "16"
+    ],
+    "nozzle_temperature": [
+        "260"
+    ],
+    "nozzle_temperature_initial_layer": [
+        "260"
+    ],
+    "cool_plate_temp": [
+        "90"
+    ],
+    "cool_plate_temp_initial_layer": [
+        "90"
+    ],
+    "eng_plate_temp": [
+        "90"
+    ],
+    "eng_plate_temp_initial_layer": [
+        "90"
+    ],
+    "hot_plate_temp": [
+        "90"
+    ],
+    "hot_plate_temp_initial_layer": [
+        "90"
+    ],
+    "textured_plate_temp": [
+        "90"
+    ],
+    "textured_plate_temp_initial_layer": [
+        "90"
+    ],
+    "fan_min_speed": [
+        "10"
+    ],
+    "fan_max_speed": [
+        "40"
+    ],
+    "slow_down_min_speed": [
+        "20"
+    ],
+    "slow_down_layer_time": [
+        "12"
+    ]
+}

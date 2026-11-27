@@ -7,6 +7,8 @@ services:
       - ./app/cad2stl.py:/app/cad2stl.py
       - ./app/mesh2stl.py:/app/mesh2stl.py
       - ./app/orient.py:/app/orient.py
+      - ./app/preprocess.py:/app/preprocess.py
+      - ./app/scale_model.py:/app/scale_model.py
       - ./app/config:/app/config
       - ./app/docs:/app/docs
       - ./app/middleware:/app/middleware

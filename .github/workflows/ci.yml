@@ -45,4 +45,4 @@ jobs:
 
       - name: Validate Python syntax
         run: |
-          python -m py_compile app/cad2stl.py app/mesh2stl.py app/orient.py app/scale_model.py
+          python -m py_compile app/cad2stl.py app/mesh2stl.py app/orient.py app/scale_model.py app/preprocess.py

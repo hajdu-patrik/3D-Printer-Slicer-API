@@ -13,8 +13,8 @@ const { enqueueSliceJob, toQueueErrorResponse } = require('./slice/queue');
 const { runCommand } = require('./slice/command');
 const { extractFirstSupportedFromZip } = require('./slice/zip');
 const { parseSliceOptions } = require('./slice/options');
-const { convertInputToStl, tryOptimizeOrientation } = require('./slice/input-processing');
-const { getModelInfo, parseOutputDetailed } = require('./slice/model-stats');
+const { convertCadToStl, preprocessModel } = require('./slice/input-processing');
+const { parseOutputDetailed } = require('./slice/model-stats');
 const { resolveSlicerExecutable, buildSlicerCommandArgs } = require('./slice/engine');
 const { applyTransformAndValidateModel } = require('./slice/transform');
 const { handleProcessingError } = require('./slice/errors');
@@ -40,7 +40,10 @@ const {
     createRuntimeSlicerProfile,
     resolveProfileSelection,
     logEngineProfileSelection,
-    finalizeEngineMetadata
+    finalizeEngineMetadata,
+    resolvePrusaBedCenter,
+    resolveOrcaFilamentConfigPath,
+    resolveMaterialOverlayPath
 } = require('./slice/profiles');
 
 /**
@@ -139,22 +142,21 @@ function appendOriginalExtensionToUpload(inputFile, originalExt, filesCleanupLis
  * Execute input preprocessing pipeline until a slicer-ready file is available.
  * @param {string} inputFile Input file path with original extension.
  * @param {'FDM'|'SLA'} technology Requested technology.
+ * @param {boolean} autoOrient Whether automatic orientation optimization runs.
  * @param {string[]} filesCleanupList Cleanup collector.
- * @returns {Promise<{processableFile: string, originalModelInfo: {x: number, y: number, z: number, height_mm: number}}>} Preprocessing result.
+ * @returns {Promise<{processableFile: string, originalModelInfo: {x: number, y: number, z: number, height_mm: number, volume_mm3?: number}}>} Preprocessing result.
  */
-async function prepareProcessableModel(inputFile, technology, filesCleanupList) {
-    let processableFile = inputFile;
-    if (path.extname(processableFile).toLowerCase() === '.zip') {
-        processableFile = await extractFirstSupportedFromZip(inputFile, filesCleanupList);
+async function prepareProcessableModel(inputFile, technology, autoOrient, filesCleanupList) {
+    let sourceFile = inputFile;
+    if (path.extname(sourceFile).toLowerCase() === '.zip') {
+        sourceFile = await extractFirstSupportedFromZip(inputFile, filesCleanupList);
     }
 
-    processableFile = await convertInputToStl(processableFile, filesCleanupList);
-    processableFile = await tryOptimizeOrientation(processableFile, technology, filesCleanupList);
-
-    const originalModelInfo = await getModelInfo(processableFile);
+    sourceFile = await convertCadToStl(sourceFile, filesCleanupList);
+    const { processableFile, modelInfo } = await preprocessModel(sourceFile, technology, autoOrient, filesCleanupList);
     return {
         processableFile,
-        originalModelInfo
+        originalModelInfo: modelInfo
     };
 }
 
@@ -313,6 +315,7 @@ async function runSlicerAndParseStats(context) {
         technology,
         layerHeight,
         infillPercentage,
+        material,
         baseConfigFile,
         orcaMachineConfigFile,
         slicerOutputPath,
@@ -323,26 +326,29 @@ async function runSlicerAndParseStats(context) {
         effectiveModelInfo
     } = context;
 
-    // WIRING (profiles agent): createRuntimeSlicerProfile gains a trailing `material` argument.
     const runtimeConfigFile = createRuntimeSlicerProfile(
         engine,
         baseConfigFile,
         technology,
         layerHeight,
         infillPercentage,
-        filesCleanupList
+        filesCleanupList,
+        material
     );
 
     logEngineProfileSelection(engine, orcaMachineConfigFile, baseConfigFile, infillPercentage, layerHeight);
 
-    // WIRING (engine agent): buildSlicerCommandArgs may gain a bed-center parameter.
+    const prusaBedCenter = engine === 'prusa' ? resolvePrusaBedCenter(baseConfigFile) : null;
+    const orcaFilamentConfigFile = engine === 'orca' ? resolveOrcaFilamentConfigPath(material) : null;
     const slicerArgs = buildSlicerCommandArgs(
         technology,
         runtimeConfigFile,
         slicerOutputPath,
         infillPercentage,
         engine,
-        orcaMachineConfigFile
+        orcaMachineConfigFile,
+        prusaBedCenter,
+        orcaFilamentConfigFile
     );
 
     const slicerExecutable = resolveSlicerExecutable(engine);
@@ -396,12 +402,14 @@ function computeCacheKey(fileHash, engine, options) {
     );
     if (!selection.isValid) return null;
 
-    // WIRING (profiles agent): add material-profile files here if profile resolution starts using them.
+    const materialProfileFile = engine === 'orca'
+        ? resolveOrcaFilamentConfigPath(options.material)
+        : resolveMaterialOverlayPath(engine, options.technology, options.material, options.layerHeight);
     return buildCacheKey({
         fileHash,
         engine,
         options,
-        profileFiles: [selection.baseConfigFile, selection.orcaMachineConfigFile]
+        profileFiles: [selection.baseConfigFile, selection.orcaMachineConfigFile, materialProfileFile]
     });
 }
 
@@ -439,6 +447,7 @@ async function executeSlicing(state) {
         const { processableFile: preparedFile, originalModelInfo } = await prepareProcessableModel(
             inputFile,
             technology,
+            options.autoOrient !== false,
             filesCleanupList
         );
 
@@ -472,6 +481,7 @@ async function executeSlicing(state) {
             technology,
             layerHeight,
             infillPercentage,
+            material: options.material,
             baseConfigFile,
             orcaMachineConfigFile,
             slicerOutputPath,

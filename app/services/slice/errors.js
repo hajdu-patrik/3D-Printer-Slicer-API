@@ -16,7 +16,8 @@ function isSourceGeometryError(err) {
 
     const failedConverter = (
         combined.includes('cad2stl.py') ||
-        combined.includes('mesh2stl.py')
+        combined.includes('mesh2stl.py') ||
+        combined.includes('preprocess.py')
     );
 
     const geometryHints = [

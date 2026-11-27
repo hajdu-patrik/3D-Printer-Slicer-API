@@ -20,6 +20,9 @@ const {
     validateBulkDownloadLimits
 } = require('../services/admin-output.service');
 const { getQueueStatus } = require('../services/slice/queue');
+const { renderMetrics } = require('../services/metrics.service');
+const { sliceJobStore } = require('../services/jobs/job-store');
+const { sliceResultCache } = require('../services/slice/result-cache');
 
 const router = express.Router();
 
@@ -138,6 +141,22 @@ router.get('/health/detailed', adminRateLimiter, requireAdmin, async (req, res) 
             error: 'Internal server error while checking system health.'
         });
     }
+});
+
+/**
+ * Prometheus text-format metrics (admin-protected).
+ * @param {import('express').Request} req Express request object.
+ * @param {import('express').Response} res Express response object.
+ * @returns {import('express').Response}
+ */
+router.get('/metrics', adminRateLimiter, requireAdmin, (req, res) => {
+    res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(renderMetrics({
+        queue: getQueueStatus(),
+        jobsByStatus: sliceJobStore.countByStatus(),
+        cache: { size: sliceResultCache.size }
+    }));
 });
 
 /**

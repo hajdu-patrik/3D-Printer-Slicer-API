@@ -256,7 +256,20 @@ const adminRateLimiter = createLimiterMiddleware({
     errorMessage: 'Too many admin requests. Please retry later.'
 });
 
+/**
+ * Light IP-based limiter for async job status polling (default 60 requests / 60 seconds / IP).
+ */
+const jobPollRateLimiter = createLimiterMiddleware({
+    limiter: new FixedWindowRateLimiter({
+        windowMs: parsePositiveInt(process.env.JOB_POLL_RATE_LIMIT_WINDOW_MS, 60_000),
+        maxRequests: parsePositiveInt(process.env.JOB_POLL_RATE_LIMIT_MAX_REQUESTS, 60)
+    }),
+    errorCode: 'JOB_POLL_RATE_LIMIT_EXCEEDED',
+    errorMessage: 'Too many job status requests. Please retry later.'
+});
+
 module.exports = {
     sliceRateLimiter,
-    adminRateLimiter
+    adminRateLimiter,
+    jobPollRateLimiter
 };

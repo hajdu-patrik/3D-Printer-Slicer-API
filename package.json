@@ -4,7 +4,8 @@
   "main": "app/server.js",
   "scripts": {
     "start": "node app/server.js",
-    "dev": "node --watch app/server.js"
+    "dev": "node --watch app/server.js",
+    "test": "node --test \"tests/unit/**/*.test.js\""
   },
   "dependencies": {
     "archiver": "^8.0.0",

@@ -11,11 +11,13 @@ require('dotenv').config();
 const createSwaggerDocument = require('./docs/swagger-docs');
 const pricingRoutes = require('./routes/pricing.routes');
 const sliceRoutes = require('./routes/slice.routes');
+const jobsRoutes = require('./routes/jobs.routes');
 const systemRoutes = require('./routes/system.routes');
 const errorHandler = require('./middleware/errorHandler');
 const { PORT, DEFAULTS } = require('./config/constants');
 const { ensureRequiredDirectories } = require('./config/paths');
 const { loadPricingFromDisk, getPricing } = require('./services/pricing.service');
+const { startOutputRetention } = require('./services/output-retention.service');
 
 // Security check for critical environment variables
 if (!process.env.ADMIN_API_KEY) {
@@ -176,6 +178,7 @@ app.get('/', (req, res) => res.redirect('/docs'));
 // API Routes
 app.use(pricingRoutes);
 app.use(sliceRoutes);
+app.use(jobsRoutes);
 app.use(systemRoutes);
 
 // Catch-all for unknown routes
@@ -194,4 +197,5 @@ app.use(errorHandler);
 app.listen(PORT, () => {
     console.log(`FDM and SLA Slicer Engine running on port ${PORT}`);
     console.log(`Swagger Docs available at http://localhost:${PORT}/docs`);
+    startOutputRetention();
 });

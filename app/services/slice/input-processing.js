@@ -62,6 +62,7 @@ async function tryOptimizeOrientation(processableFile, technology, filesCleanupL
 }
 
 const RESULT_MARKER = '@@RESULT@@';
+const CAD_CONVERTER_EXTENSIONS = new Set(['.step', '.stp', '.igs', '.iges']);
 
 /**
  * Extract the geometry JSON line emitted by preprocess.py.
@@ -85,7 +86,8 @@ function parsePreprocessResult(stdout) {
  */
 async function convertCadToStl(processableFile, filesCleanupList) {
     const currentExt = path.extname(processableFile).toLowerCase();
-    if (!EXTENSIONS.cad.includes(currentExt)) return processableFile;
+    // EXTENSIONS.cad also lists .ply for upload grouping, but PLY is a mesh format handled by preprocess.py.
+    if (!CAD_CONVERTER_EXTENSIONS.has(currentExt)) return processableFile;
     console.log('[INFO] Converting CAD to STL...');
     const finalStlPath = processableFile + '.stl';
     filesCleanupList.push(finalStlPath);

@@ -17,6 +17,7 @@ load failures use wording that errors.js maps to INVALID_SOURCE_GEOMETRY.
 import argparse
 import json
 import math
+import shutil
 import sys
 
 import numpy as np
@@ -27,6 +28,13 @@ RESULT_MARKER = "@@RESULT@@"
 
 class SourceGeometryError(Exception):
     """Input could not be read as printable mesh geometry."""
+
+
+class EmptyGeometryError(SourceGeometryError):
+    """Input parsed but contains no faces/vertices."""
+
+
+EMPTY_GEOMETRY_MESSAGE = "The uploaded file does not contain mesh geometry."
 
 
 def load_mesh(input_path):
@@ -40,12 +48,24 @@ def load_mesh(input_path):
 
     if isinstance(mesh, trimesh.Scene):
         if not mesh.geometry:
-            raise SourceGeometryError("The uploaded file does not contain mesh geometry.")
+            raise EmptyGeometryError(EMPTY_GEOMETRY_MESSAGE)
         mesh = trimesh.util.concatenate(mesh.dump())
 
     if not isinstance(mesh, trimesh.Trimesh) or len(mesh.faces) == 0 or len(mesh.vertices) == 0:
-        raise SourceGeometryError("The uploaded file does not contain mesh geometry.")
+        raise EmptyGeometryError(EMPTY_GEOMETRY_MESSAGE)
     return mesh
+
+
+def _emit_unknown_dimensions(input_path, output_path):
+    """Direct STL with no geometry: keep the API contract (dimension check -> MODEL_DIMENSIONS_UNAVAILABLE)."""
+    shutil.copyfile(input_path, output_path)
+    print("[PYTHON PREPROCESS] Warning: STL contains no geometry; reporting unknown dimensions.")
+    emit_result({
+        "x": 0.0, "y": 0.0, "z": 0.0,
+        "volume_mm3": 0.0, "surface_area_mm2": 0.0,
+        "is_watertight": False, "triangle_count": 0,
+        "auto_oriented": False,
+    })
 
 
 def place_on_build_plate(mesh):
@@ -79,7 +99,16 @@ def run_preprocess(input_path, output_path, technology="FDM", auto_orient=True):
     """Load, optionally orient, place on plate, export STL and emit stats."""
     from orient import apply_rotation, find_best_orientation
 
-    mesh = load_mesh(input_path)
+    try:
+        mesh = load_mesh(input_path)
+    except EmptyGeometryError:
+        # Direct STL uploads never passed a converter; an empty STL is a dimension problem, not a converter failure.
+        lowered = input_path.lower()
+        is_cad_output = lowered.endswith((".step.stl", ".stp.stl", ".igs.stl", ".iges.stl"))
+        if lowered.endswith(".stl") and not is_cad_output:
+            _emit_unknown_dimensions(input_path, output_path)
+            return
+        raise
     extra = {"auto_oriented": False}
     if auto_orient:
         try:

@@ -4,15 +4,25 @@ This folder contains integration test assets and test runners for the 3D Printer
 
 ## Structure
 
+- `unit/`: Node unit tests (`*.test.js`, run with `npm test`).
 - `testing-files/`: Sample input files used by the runners.
 - `testing-scripts/`: Python test runners and shared test utilities.
 
 ## Notes
 
 - Test result reports are generated under `testing-scripts/results/`.
+- Repeated identical slice requests return `cache_hit: true` (no new output file) unless `SLICE_RESULT_CACHE_TTL_MS=0` is set on the API under test.
 - Large sample files and generated reports are intentionally gitignored.
 
 ---
+
+## Unit Tests (fast pre-check)
+
+```bash
+npm test
+```
+
+Runs `node --test` on `tests/unit/*.test.js`. No API runtime is needed; CI runs it after the syntax checks.
 
 ## Prerequisites
 

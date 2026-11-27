@@ -21,8 +21,11 @@ Built for zero-downtime rollout, this API now supports two slicer engines throug
 ## ✨ Core Features
 
 - 🔄 **Model-focused input processing:** direct 3D, CAD, and ZIP uploads with exactly one supported model source file.
-- ⚖️ **Auto-orientation:** Python-based orientation optimization before slicing.
-- 🧮 **Pricing engine:** dynamic hourly-rate calculation from persisted pricing map.
+- ⚖️ **Auto-orientation:** overhang-aware Python orientation optimization before slicing (`autoOrient`, default `true`).
+- 🧮 **Pricing engine:** hourly rate + material cost + setup fee + quantity, with a `price_breakdown` in every response.
+- ⏱️ **Slicer-accurate stats:** print time and material usage are read from G-code / SL1 metadata (`print_time_source`), heuristic only as fallback.
+- 🗂️ **Result cache:** identical requests are served from an in-memory cache (`cache_hit`), price recomputed.
+- 🔁 **Async jobs:** submit with `POST /prusa/slice/jobs` / `POST /orca/slice/jobs`, poll `GET /slice/jobs/:jobId`.
 - 🚦 **Queue + rate protection:** bounded queue and endpoint rate limiting for CPU-heavy requests.
 - 🧨 **ZIP safety checks:** entry/size/path validation and encrypted ZIP rejection.
 - 🧵 **Dual slicer routing:** Prusa and Orca engines behind dedicated endpoints.
@@ -57,6 +60,9 @@ Public endpoints do not require admin key.
 - `GET /pricing`
 - `POST /prusa/slice`
 - `POST /orca/slice`
+- `POST /prusa/slice/jobs`
+- `POST /orca/slice/jobs`
+- `GET /slice/jobs/:jobId`
 - `GET /openapi.json`
 - `GET /docs`
 - `GET /`
@@ -64,8 +70,10 @@ Public endpoints do not require admin key.
 ### Admin-protected
 
 - `GET /health/detailed`
+- `GET /metrics` (Prometheus text format)
 - `POST /pricing/FDM`
 - `POST /pricing/SLA`
+- `PUT /pricing/:technology/setup-fee`
 - `PATCH /pricing/:technology/:material`
 - `DELETE /pricing/:technology/:material`
 - `GET /admin/output-files`
@@ -88,12 +96,15 @@ Public endpoints do not require admin key.
 ### Middleware
 
 - `app/middleware/rateLimit.js` - in-memory IP throttling for slice and admin routes (`Retry-After` aware responses).
+- `app/middleware/queuePrecheck.js` - advisory queue capacity check before the upload body is accepted (`SLICE_QUEUE_FULL` / `SLICE_QUEUE_CLIENT_LIMIT`).
+- `app/middleware/upload.js` - shared multer single-file upload (`choosenFile`, extension whitelist, size limit).
 - `app/middleware/requireAdmin.js` - timing-safe x-api-key guard + unauthorized attempt logging.
 - `app/middleware/errorHandler.js` - centralized request/upload/parser error normalization.
 
 ### Routes
 
-- `app/routes/slice.routes.js` - `POST /prusa/slice`, `POST /orca/slice` with rate-limit and single-file upload middleware.
+- `app/routes/slice.routes.js` - `POST /prusa/slice`, `POST /orca/slice` with rate-limit, queue pre-check and single-file upload middleware.
+- `app/routes/jobs.routes.js` - async `POST /prusa/slice/jobs`, `POST /orca/slice/jobs`, `GET /slice/jobs/:jobId`.
 - `app/routes/pricing.routes.js` - public pricing read + admin pricing mutations.
 - `app/routes/system.routes.js` - health endpoints and admin artifact listing/download endpoints.
 
@@ -101,20 +112,27 @@ Public endpoints do not require admin key.
 
 - `app/services/pricing.service.js` - pricing load/save/migration/lookup logic.
 - `app/services/pricing/catalog.js` - in-memory pricing catalog: normalization, material lookup, and rate calculation.
+- `app/services/pricing/normalize.js` - validation/normalization of the optional `materialCost` and `setupFee` sections.
 - `app/services/pricing/repository.js` - file-system pricing repository with primary/legacy pricing file resolution.
 - `app/services/admin-output.service.js` - validated admin output listing/download helpers and `ALL` ZIP bulk limit checks.
-- `app/services/slice.service.js` - end-to-end slicing orchestrator and queue error mapping.
+- `app/services/slice.service.js` - end-to-end slicing orchestrator, result-cache lookup and queue error mapping.
+- `app/services/jobs/job-store.js`, `app/services/jobs/slice-jobs.service.js` - in-memory async job store and submit/status handlers.
+- `app/services/metrics.service.js` - Prometheus text-format metrics.
+- `app/services/output-retention.service.js` - periodic cleanup of old outputs and stale upload temp files.
 - `app/services/slice/command.js` - subprocess execution via `execFile` with timeout and optional debug logs.
 - `app/services/slice/common.js` - output naming, isolated Orca output dirs, cleanup utilities.
 - `app/services/slice/engine.js` - slicer argument construction (Prusa vs Orca).
 - `app/services/slice/errors.js` - error classification and API error responses.
-- `app/services/slice/input-processing.js` - conversion/orientation preprocessing pipeline.
+- `app/services/slice/gcode-metadata.js` - G-code head/tail (256 KB) print-time and material metadata parsing.
+- `app/services/slice/input-processing.js` - conversion and `preprocess.py` preprocessing pipeline.
 - `app/services/slice/model-stats.js` - metadata/stat parsing from slicer outputs.
 - `app/services/slice/number-utils.js` - shared numeric parser helpers.
 - `app/services/slice/options.js` - strict request option validation/parsing.
 - `app/services/slice/profiles.js` - profile selection, runtime profile generation, build-volume limits.
 - `app/services/slice/queue.js` - FIFO queue + per-client fairness + timeout enforcement.
 - `app/services/slice/response.js` - successful slice response composition and price calculation strategies.
+- `app/services/slice/result-cache.js` - in-memory LRU/TTL slice result cache.
+- `app/services/slice/sla-stats.js` - SL1 `config.ini` print-time/material parsing.
 - `app/services/slice/transform.js` - transform planning/execution and bounds validation.
 - `app/services/slice/value-parsers.js` - safe parsing and profile filename sanitization.
 - `app/services/slice/zip.js` - ZIP safety inspection and safe extraction.
@@ -122,8 +140,16 @@ Public endpoints do not require admin key.
 ### Utilities and API docs
 
 - `app/utils/client-ip.js` - trust-proxy-aware client IP normalization.
+- `app/utils/env.js` - environment integer parsing helpers.
 - `app/utils/logger.js` - structured processing error logging.
 - `app/docs/swagger-docs.js` - OpenAPI generation for `/docs` and `/openapi.json`.
+
+### Python helpers
+
+- `app/preprocess.py` - `preprocess` / `transform` modes; prints `@@RESULT@@{json}` with geometry metrics (no model healing). At most 2 Python spawns per request.
+- `app/orient.py` - overhang-aware orientation candidate scoring.
+- `app/cad2stl.py` - STEP/IGES to STL with curvature-adaptive meshing (OCC healing options off).
+- `app/mesh2stl.py`, `app/scale_model.py` - mesh normalization and scale/rotation.
 
 ---
 
@@ -143,6 +169,8 @@ Optional fields:
 - `targetSizeX`, `targetSizeY`, `targetSizeZ` (target dimensions in selected unit)
 - `scalePercent` (uniform scale; cannot be combined with `targetSizeX/Y/Z`)
 - `rotationX`, `rotationY`, `rotationZ` (degrees)
+- `autoOrient` (`true`/`false`, default `true`; invalid value returns `INVALID_AUTO_ORIENT`)
+- `quantity` (integer `1`-`1000`, default `1`; invalid value returns `INVALID_QUANTITY`; affects price only)
 - `printerProfile` (profile override filename)
 - `processProfile` (Orca only process profile override filename)
 
@@ -162,6 +190,7 @@ Uses `prusa-slicer`.
   - optional X/Y/Z rotation
 - Validates final model size against selected printer profile limits (`min`/`max` build volume)
 - You can override profile file with `printerProfile` from `configs/prusa`
+- `--center` is derived from the profile `bed_shape`; material overlays from `configs/prusa/materials/` are merged into the runtime profile (unknown material falls back to the base profile)
 
 Example:
 
@@ -184,7 +213,7 @@ Uses `orca-slicer`.
 - Forced `FDM` processing
 - Allowed `layerHeight`: `0.1`, `0.2`, `0.3`
 - Rejects SLA-only materials
-- Runs with Orca arrange/orient flow and machine+process profile pair
+- Runs with `--arrange 1 --orient 0` (orientation is done once by `orient.py`), loads the material filament preset `configs/orca/materials/FDM_<MAT>.json` via `--load-filaments`, and uses a machine+process profile pair
   - Machine profile file is resolved from `.env` via `ORCA_MACHINE_PROFILE` (default: `Bambu_P1S_0.4_nozzle.json`)
 - Process profile file is selected by `layerHeight` (`0.1/0.2/0.3`) and can be overridden via `.env`:
   - `ORCA_PROCESS_PROFILE_0_1`
@@ -215,11 +244,26 @@ curl -X POST http://localhost:3000/orca/slice \
   -F "targetSizeZ=5.0"
 ```
 
+### Async jobs
+
+`POST /prusa/slice/jobs` and `POST /orca/slice/jobs` accept the same multipart fields as the synchronous endpoints and return `202`:
+
+```json
+{ "success": true, "jobId": "<uuid>", "status": "queued", "statusUrl": "/slice/jobs/<uuid>" }
+```
+
+`GET /slice/jobs/:jobId` returns `status` = `queued`, `processing`, `done` (with `result`, the same body as the synchronous response) or `failed` (with `error: { status, body }`). Polling is limited to 60 requests / 60 s per IP. Errors: `INVALID_JOB_ID` (400), `JOB_NOT_FOUND` (404), `JOB_STORE_FULL` (503), `JOB_POLL_RATE_LIMIT_EXCEEDED` (429). Finished jobs are kept for `JOB_RESULT_TTL_MS`.
+
+### Result cache
+
+Cache key: SHA-256 of the file bytes + engine + all slicing options except `quantity` + profile/material file mtime and size. A hit returns `"cache_hit": true`, recomputes the price from current pricing and creates no new output file. Set `SLICE_RESULT_CACHE_TTL_MS=0` to disable.
+
 ### Common successful response
 
 ```json
 {
   "success": true,
+  "cache_hit": false,
   "slicer_engine": "prusa",
   "technology": "FDM",
   "material": "PLA",
@@ -266,20 +310,39 @@ curl -X POST http://localhost:3000/orca/slice \
     "max": {
       "x": 256,
       "y": 256,
-      "z": 210
+      "z": 256
     },
     "source_profile": "FDM_0.2mm.ini"
   },
   "hourly_rate": 800,
+  "quantity": 1,
+  "price_breakdown": {
+    "time_cost_huf": 1200,
+    "material_cost_huf": 120,
+    "setup_fee_huf": 0,
+    "per_piece_huf": 1320,
+    "quantity": 1,
+    "total_huf": 1320,
+    "material_unit": "g",
+    "material_cost_per_unit": 12
+  },
   "stats": {
     "print_time_seconds": 5400,
     "print_time_readable": "1h 30m",
+    "print_time_source": "slicer",
     "material_used_m": 12.45,
+    "material_used_g": 10,
+    "material_used_ml": 0,
     "object_height_mm": 45.2,
-    "estimated_price_huf": 1350
+    "estimated_price_huf": 1320
   }
 }
 ```
+
+Notes:
+
+- `print_time_source` is `slicer` when time comes from slicer output (SLA: `.sl1` `config.ini`; FDM: seconds-accurate G-code comments preferred over `M73`) and `estimate` when the heuristic fallback was used.
+- `material_used_g` is used for FDM pricing, `material_used_ml` for SLA pricing.
 
 ### Common slicing error codes
 
@@ -298,6 +361,12 @@ curl -X POST http://localhost:3000/orca/slice \
 - `INVALID_KEEP_PROPORTIONS`
 - `INVALID_SIZE_OPTIONS`
 - `INVALID_ROTATION_OPTIONS`
+- `INVALID_AUTO_ORIENT`
+- `INVALID_QUANTITY`
+- `INVALID_JOB_ID`
+- `JOB_NOT_FOUND`
+- `JOB_STORE_FULL`
+- `JOB_POLL_RATE_LIMIT_EXCEEDED`
 - `CONFLICTING_SIZE_OPTIONS`
 - `INVALID_PROFILE_NAME`
 - `PROFILE_NOT_FOUND`
@@ -318,6 +387,7 @@ curl -X POST http://localhost:3000/orca/slice \
 - `SLICE_QUEUE_CLIENT_LIMIT` -> HTTP `429`.
 - `SLICE_QUEUE_TIMEOUT` -> HTTP `503`.
 - `FILE_PROCESSING_TIMEOUT` -> HTTP `422`.
+- Queue capacity (`SLICE_QUEUE_FULL`, `SLICE_QUEUE_CLIENT_LIMIT`) is pre-checked before the upload body is accepted.
 
 ---
 
@@ -325,7 +395,15 @@ curl -X POST http://localhost:3000/orca/slice \
 
 ### `GET /pricing`
 
-Returns full pricing object.
+Returns the full pricing object: hourly rates per material plus the optional `materialCost` (HUF/g for FDM, HUF/ml for SLA) and `setupFee` (flat HUF per order) sections.
+
+Price formula (HUF):
+
+```
+total = ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit)) / 10) * 10
+```
+
+`materialAmount` is grams for FDM and millilitres for SLA.
 
 ### `POST /pricing/FDM` / `POST /pricing/SLA` (admin)
 
@@ -334,17 +412,31 @@ Create new material for selected technology.
 ```json
 {
   "material": "ASA",
-  "price": 1200
+  "price": 1200,
+  "materialCostPerUnit": 14
 }
 ```
 
+`materialCostPerUnit` is optional.
+
 ### `PATCH /pricing/:technology/:material` (admin)
 
-Update existing material price only.
+Update an existing material's hourly price and/or material cost. `price` is optional when `materialCostPerUnit` is supplied.
 
 ```json
 {
-  "price": 950
+  "price": 950,
+  "materialCostPerUnit": 13
+}
+```
+
+### `PUT /pricing/:technology/setup-fee` (admin)
+
+Set the flat per-order setup fee for `FDM` or `SLA`.
+
+```json
+{
+  "setupFee": 500
 }
 ```
 
@@ -355,6 +447,10 @@ Delete existing material from selected technology.
 ---
 
 ## 🛠️ Admin Endpoint
+
+### `GET /metrics` (admin)
+
+Prometheus text-format metrics (slice outcomes, queue rejections, job states, cache size).
 
 ### `GET /admin/output-files` (admin)
 
@@ -448,9 +544,19 @@ cp configs/pricing.example.json configs/pricing.json
     "Standard": 2000,
     "ABS-Like": 2000,
     "Flexible": 2800
+  },
+  "materialCost": {
+    "FDM": { "PLA": 12, "ABS": 12, "PETG": 14, "TPU": 18 },
+    "SLA": { "Standard": 45, "ABS-Like": 45, "Flexible": 60 }
+  },
+  "setupFee": {
+    "FDM": 500,
+    "SLA": 1000
   }
 }
 ```
+
+`materialCost` and `setupFee` are optional; files without them keep working (cost and fee `0`).
 
 ### 3. Set at least `ADMIN_API_KEY` in `.env`
 
@@ -467,7 +573,7 @@ The app reads `.env` automatically on local startup via `dotenv`, and Docker rea
 
 - `input/` → temporary working input directory used during conversion/slicing pipeline.
 - `output/` → generated output artifacts (`.gcode`, `.sl1`, etc.).
-- `configs/` → slicer profiles (`prusa/*.ini`, `orca/*.json`) + persistent `pricing.json`.
+- `configs/` → slicer profiles (`prusa/*.ini`, `orca/*.json`), material overlays (`prusa/materials/`, `orca/materials/`) + persistent `pricing.json`.
 
 Runtime paths are root-scoped in both local and Docker execution.
 No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` are intentionally not used).
@@ -480,11 +586,13 @@ No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` 
   - `configs/prusa/FDM_0.3mm.ini`
   - `configs/prusa/SLA_0.025mm.ini`
   - `configs/prusa/SLA_0.05mm.ini`
+  - `configs/prusa/materials/FDM_<MAT>.ini`, `SLA_<MAT>_<layer>mm.ini` (material overlays)
 - Orca machine/process profiles (`.json`):
   - `configs/orca/Bambu_P1S_0.4_nozzle.json`
   - `configs/orca/FDM_0.1mm.json`
   - `configs/orca/FDM_0.2mm.json`
   - `configs/orca/FDM_0.3mm.json`
+  - `configs/orca/materials/FDM_<MAT>.json` (filament presets)
 
 You can add your own profiles (for example 2 FDM + 2 SLA for Prusa, or multiple Orca machine profiles), then select them per request with `printerProfile` (and `processProfile` for Orca).
 
@@ -496,7 +604,7 @@ Different printer/process profiles produce different G-code behavior in practice
 
 You can customize pricing, security, and slicing behavior without changing endpoint contracts.
 
-- **Pricing Matrix:** Persisted in `configs/pricing.json` (managed via `/pricing` endpoints).
+- **Pricing Matrix:** Persisted in `configs/pricing.json` (managed via `/pricing` endpoints), including optional `materialCost` and `setupFee` sections.
 - **Admin Security:** `ADMIN_API_KEY` environment variable controls access to pricing updates/deletes.
 - **Admin Browser CORS Control:** `/admin/*` browser-origin requests are constrained by `ADMIN_CORS_ALLOWED_ORIGINS`.
 - **Admin File Listing:** `GET /admin/output-files` requires `ADMIN_API_KEY` and returns generated output artifacts.
@@ -508,6 +616,9 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Request Rate Limit:** Slicing endpoints are IP-rate-limited (default `3` requests / `60s`). Expired rate-limit buckets are automatically pruned.
 - **Admin Rate Limit:** Admin endpoints are IP-rate-limited (default `30` requests / `60s`) to reduce brute-force API-key attempts.
 - **Proxy Trust:** Set `TRUST_PROXY=true` only behind a reverse proxy and configure `TRUST_PROXY_CIDRS` to trusted proxy CIDRs/names; forwarded headers are ignored otherwise.
+- **Async Jobs:** `JOB_RESULT_TTL_MS` (default 1 h), `JOB_MAX_ENTRIES` (1000), `JOB_POLL_RATE_LIMIT_WINDOW_MS` / `JOB_POLL_RATE_LIMIT_MAX_REQUESTS` (60 per 60 s per IP).
+- **Result Cache:** `SLICE_RESULT_CACHE_TTL_MS` (default 24 h, `0` disables) and `SLICE_RESULT_CACHE_MAX_ENTRIES` (500).
+- **Retention:** `OUTPUT_RETENTION_HOURS` (default 168), `UPLOAD_TEMP_RETENTION_MINUTES` (60) and `OUTPUT_CLEANUP_INTERVAL_MS` (1 h) control periodic cleanup of `output/` and stale upload temp files in `input/`.
 - **Slicing Queue:** CPU-heavy slice jobs are queued in arrival order and processed FIFO (`MAX_CONCURRENT_SLICES`, default `1`).
 - **Queue Fairness:** Per-client queue ownership is bounded (`MAX_SLICE_QUEUE_PER_IP`) so one client cannot monopolize all pending capacity.
 - **Queue Safety Limits:** Queue length and wait timeout are bounded (`MAX_SLICE_QUEUE_LENGTH`, `MAX_SLICE_QUEUE_WAIT_MS`).
@@ -517,7 +628,7 @@ You can customize pricing, security, and slicing behavior without changing endpo
 - **Body Parser Limits:** JSON/form payload size is capped (`JSON_BODY_LIMIT`, `FORM_BODY_LIMIT`, default `1mb`).
 - **Slicer Profiles:** Stored in `configs/prusa/*.ini` and `configs/orca/*.json`.
 - **Timeouts:** Internal 10-minute kill-switches prevent infinite loops during complex conversion/slicing operations and return `FILE_PROCESSING_TIMEOUT` when exceeded.
-- **Model Fidelity Policy:** Uploaded model data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error.
+- **Model Fidelity Policy:** Uploaded model data is never auto-healed or shape-corrected; invalid/non-printable source data is rejected with a clear error. Orientation (`autoOrient`) only rotates the model.
 - **Supply-Chain Integrity:** Docker build pins and verifies SHA256 checksums for downloaded PrusaSlicer and OrcaSlicer AppImages.
 - **Python Resolver Security:** `PYTHON_EXECUTABLE` must be absolute and existing when set; fallback resolution uses `VIRTUAL_ENV` and known absolute runtime paths.
 - **Command Debugging:** `DEBUG_COMMAND_LOGS=true` enables verbose converter/slicer stdout/stderr logging.
@@ -538,6 +649,11 @@ This repository currently includes the following synchronized changes across imp
 - **Documentation synchronization:** global Claude guides (`CLAUDE.md`, `.claude/CLAUDE.md`) and folder-local guides under `app/`, `configs/`, and `tests/testing-scripts/`.
 
 ---
+
+## 🧪 Tests
+
+- Fast unit suite: `npm test` (Node `node --test`, `tests/unit/*.test.js`), also run in CI.
+- Integration runners: see [`tests/README.md`](tests/README.md). Repeated identical slice requests return `cache_hit: true` unless `SLICE_RESULT_CACHE_TTL_MS=0`.
 
 ## 🧪 Test publication policy
 

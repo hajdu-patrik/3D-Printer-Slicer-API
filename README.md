@@ -594,6 +594,8 @@ No app-local runtime folders are used (`app/input`, `app/output`, `app/configs` 
   - `configs/orca/FDM_0.3mm.json`
   - `configs/orca/materials/FDM_<MAT>.json` (filament presets)
 
+Material overlay values are taken from the official slicer presets bundled with the pinned slicer versions: PrusaSlicer 2.8.1 `Generic PLA/PETG/ABS/FLEX` filaments and the SL1S `Prusament Resin Tough` / `Flex80` resins, and OrcaSlicer 2.3.1 BBL `Generic PLA/PETG/ABS/TPU`. Each Prusa overlay names its source preset in its header comment.
+
 You can add your own profiles (for example 2 FDM + 2 SLA for Prusa, or multiple Orca machine profiles), then select them per request with `printerProfile` (and `processProfile` for Orca).
 
 Different printer/process profiles produce different G-code behavior in practice (speed, accelerations, cooling, supports, extrusion strategy), even for the same model.

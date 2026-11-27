@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## v3.2.1 (2026-11-27)
+
+### Fixed
+
+- Material overlays now use the official slicer presets instead of approximate values:
+  - Prusa FDM (`configs/prusa/materials/FDM_*.ini`) takes its values from PrusaSlicer 2.8.1 `[filament:Generic PLA|PETG|ABS|FLEX]` (TPU maps to Generic FLEX). Notable changes: TPU `filament_max_volumetric_speed` 3.2 -> 1.2 and `cooling = 0`, with the earlier non-preset print-speed overrides removed; ABS 12 -> 11 mm³/s, bed 110 °C; PETG first layer 230 °C, bed 90/85 °C; PLA 210/215 °C, `fan_below_layer_time` 100.
+  - Prusa SLA (`configs/prusa/materials/SLA_*`) takes its values from the SL1S presets `Prusament Resin Tough Prusa Orange` (ABS-Like) and `Prusament Resin Flex80 Black` (Flexible). Exposure times are 1.8/2.0 s and 2.6/3.0 s, the initial exposure is 25 s, and Flexible gets `material_print_speed = slow`.
+  - Orca (`configs/orca/materials/FDM_*.json`) takes its values from OrcaSlicer 2.3.1 BBL `Generic PLA|PETG|ABS|TPU`, all compatible with the P1S 0.4 nozzle. This covers nozzle and plate temperatures, volumetric speeds, fan settings and the cooling layer times.
+- Behaviour change: print times and therefore prices change for every non-default material. The largest change is Prusa TPU, which is now considerably slower because of the official 1.2 mm³/s volumetric limit.
+
+### Validation (v3.2.1)
+
+- Material matrix against the rebuilt Docker image: 14/14 combinations succeeded with `print_time_source=slicer`. These were PLA, PETG, ABS and TPU on both Prusa and Orca, and Standard, ABS-Like and Flexible SLA resins at 0.05 and 0.025 mm.
+- `full_api_test_runner` 21/21 and `npm test` 39/39.
+
 ## v3.2.0 (2026-11-27)
 
 ### Added

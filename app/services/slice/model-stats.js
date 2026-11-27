@@ -4,36 +4,8 @@
 
 const fs = require('node:fs');
 const { DEFAULTS } = require('../../config/constants');
-const { runCommand } = require('./command');
 const { readGcodeMetadata } = require('./gcode-metadata');
 const { readSl1Metadata } = require('./sla-stats');
-
-/**
- * Read model dimensions from `prusa-slicer --info` output.
- * @param {string} filePath Path to mesh file.
- * @returns {Promise<{x: number, y: number, z: number, height_mm: number}>} Parsed size metrics.
- */
-async function getModelInfo(filePath) {
-    try {
-        const { stdout } = await runCommand('prusa-slicer', ['--info', filePath]);
-        let x = 0;
-        let y = 0;
-        let z = 0;
-
-        const matchX = /size_x\s*=\s*([0-9.]+)/i.exec(stdout);
-        const matchY = /size_y\s*=\s*([0-9.]+)/i.exec(stdout);
-        const matchZ = /size_z\s*=\s*([0-9.]+)/i.exec(stdout);
-
-        if (matchX) x = Number.parseFloat(matchX[1]);
-        if (matchY) y = Number.parseFloat(matchY[1]);
-        if (matchZ) z = Number.parseFloat(matchZ[1]);
-
-        return { x, y, z, height_mm: z };
-    } catch (err) {
-        console.warn(`[WARN] Could not get model info: ${err.message}`);
-        return { x: 0, y: 0, z: 0, height_mm: 0 };
-    }
-}
 
 /**
  * Round to 3 decimals.
@@ -153,6 +125,5 @@ async function parseOutputDetailed(filePath, technology, layerHeight, knownHeigh
 }
 
 module.exports = {
-    getModelInfo,
     parseOutputDetailed
 };

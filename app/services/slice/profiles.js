@@ -381,28 +381,44 @@ function resolvePrusaBedCenter(configPath) {
 }
 
 const MATERIAL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const PRINTER_PREFIX_PATTERN = /^([A-Za-z0-9]+)_(?:FDM|SLA)_/;
+
+/**
+ * Derive the printer prefix from a printer-specific base profile name (e.g. `MK4_FDM_0.2mm.ini` -> `MK4`).
+ * The default profiles (`FDM_0.2mm.ini`, `SLA_0.05mm.ini`) have no prefix.
+ * @param {string | null | undefined} baseConfigPath Base profile path.
+ * @returns {string | null} Printer prefix or null.
+ */
+function resolvePrinterProfilePrefix(baseConfigPath) {
+    const match = PRINTER_PREFIX_PATTERN.exec(path.basename(String(baseConfigPath || '')));
+    return match ? match[1] : null;
+}
 
 /**
  * Resolve optional material overlay file for engine/technology/material.
+ * Printer-specific overlays (`<PRINTER>_<tech>_<material>...`) are preferred when a printer prefix is given.
  * SLA overlays may be layer-specific (`SLA_<material>_<layer>mm.ini`) and are preferred over `SLA_<material>.ini`.
  * Unknown or unsafe material names resolve to null (base profile unchanged).
  * @param {'prusa'|'orca'} engine Slicer engine key.
  * @param {'FDM'|'SLA'} technology Active technology.
  * @param {string | null | undefined} material Requested material.
  * @param {number | string} [layerHeight] Requested layer height.
+ * @param {string | null} [printerPrefix=null] Printer prefix from resolvePrinterProfilePrefix.
  * @returns {string | null} Absolute overlay path or null.
  */
-function resolveMaterialOverlayPath(engine, technology, material, layerHeight) {
+function resolveMaterialOverlayPath(engine, technology, material, layerHeight, printerPrefix = null) {
     const name = String(material || '').trim();
     if (!MATERIAL_NAME_PATTERN.test(name)) return null;
 
     const baseDir = path.join(engine === 'orca' ? ORCA_CONFIGS_DIR : PRUSA_CONFIGS_DIR, 'materials');
     const extension = engine === 'orca' ? 'json' : 'ini';
+    const hasLayer = layerHeight !== undefined && layerHeight !== null && Number.isFinite(Number.parseFloat(layerHeight));
+    const prefixes = printerPrefix && MATERIAL_NAME_PATTERN.test(printerPrefix) ? [`${printerPrefix}_`, ''] : [''];
     const candidates = [];
-    if (layerHeight !== undefined && layerHeight !== null && Number.isFinite(Number.parseFloat(layerHeight))) {
-        candidates.push(`${technology}_${name}_${layerHeight}mm.${extension}`);
+    for (const prefix of prefixes) {
+        if (hasLayer) candidates.push(`${prefix}${technology}_${name}_${layerHeight}mm.${extension}`);
+        candidates.push(`${prefix}${technology}_${name}.${extension}`);
     }
-    candidates.push(`${technology}_${name}.${extension}`);
 
     for (const candidate of candidates) {
         const candidatePath = path.join(baseDir, candidate);
@@ -433,7 +449,13 @@ function resolveOrcaFilamentConfigPath(material) {
 function createPrusaRuntimeProfile(baseConfigPath, technology, layerHeight, infillPercentage, filesCleanupList, material = null) {
     let iniContent = fs.readFileSync(baseConfigPath, 'utf8');
 
-    const overlayPath = resolveMaterialOverlayPath('prusa', technology, material, layerHeight);
+    const overlayPath = resolveMaterialOverlayPath(
+        'prusa',
+        technology,
+        material,
+        layerHeight,
+        resolvePrinterProfilePrefix(baseConfigPath)
+    );
     if (overlayPath) {
         for (const [key, value] of Object.entries(readIniKeyValues(overlayPath))) {
             iniContent = upsertIniKey(iniContent, key, value);
@@ -553,6 +575,7 @@ module.exports = {
     resolveBuildVolumeLimits,
     resolvePrusaBedCenter,
     resolveMaterialOverlayPath,
+    resolvePrinterProfilePrefix,
     resolveOrcaFilamentConfigPath,
     validateModelDimensionsAgainstLimits,
     createRuntimeSlicerProfile,

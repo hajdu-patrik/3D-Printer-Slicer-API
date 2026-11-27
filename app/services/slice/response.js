@@ -138,6 +138,38 @@ function resolveProfileMapper(engine) {
 }
 
 /**
+ * Round to a fixed number of decimals.
+ * @param {number} value Number to round.
+ * @param {number} decimals Decimal places.
+ * @returns {number} Rounded value.
+ */
+function roundTo(value, decimals) {
+    const factor = 10 ** decimals;
+    return Math.round(value * factor) / factor;
+}
+
+/**
+ * Build the geometry block from the final (sliced) model metrics.
+ * Volume is only meaningful for watertight meshes, so it is null otherwise.
+ * The printed material mass is stats.material_used_g (slicer output, includes infill and supports).
+ * @param {{volume_mm3?: number, surface_area_mm2?: number, is_watertight?: boolean, triangle_count?: number} | undefined} modelGeometry Final model metrics.
+ * @returns {{volume_cm3: number | null, surface_area_cm2: number | null, is_watertight: boolean | null, triangle_count: number | null}} Geometry payload.
+ */
+function buildModelGeometry(modelGeometry) {
+    const info = modelGeometry || {};
+    const isWatertight = typeof info.is_watertight === 'boolean' ? info.is_watertight : null;
+    const volume = Number(info.volume_mm3);
+    const area = Number(info.surface_area_mm2);
+    const triangles = Number(info.triangle_count);
+    return {
+        volume_cm3: isWatertight && Number.isFinite(volume) && volume > 0 ? roundTo(volume / 1000, 3) : null,
+        surface_area_cm2: Number.isFinite(area) && area > 0 ? roundTo(area / 100, 3) : null,
+        is_watertight: isWatertight,
+        triangle_count: Number.isInteger(triangles) && triangles > 0 ? triangles : null
+    };
+}
+
+/**
  * Build successful slice response payload.
  * @param {{
  * engine: 'prusa'|'orca',
@@ -167,13 +199,15 @@ function buildSliceSuccessResponse(context) {
         modelBoundsValidation,
         buildVolumeLimits,
         stats,
+        modelGeometry,
+        preview,
         quantity: rawQuantity
     } = context;
 
     const { hourlyRate, totalPrice, quantity, breakdown } = calculateSlicePricing(technology, material, stats, rawQuantity);
     const profiles = resolveProfileMapper(engine)(context);
 
-    return {
+    const payload = {
         success: true,
         slicer_engine: engine,
         technology,
@@ -198,6 +232,7 @@ function buildSliceSuccessResponse(context) {
             }),
             final_dimensions_mm: roundDimensions(modelBoundsValidation.dimensions)
         },
+        model_geometry: buildModelGeometry(modelGeometry),
         build_volume_limits_mm: {
             min: roundDimensions(buildVolumeLimits.min),
             max: roundDimensions(buildVolumeLimits.max),
@@ -211,10 +246,17 @@ function buildSliceSuccessResponse(context) {
             estimated_price_huf: totalPrice
         }
     };
+
+    if (preview) {
+        payload.preview = preview;
+    }
+
+    return payload;
 }
 
 module.exports = {
     buildSliceSuccessResponse,
+    buildModelGeometry,
     calculateSlicePricing,
     resolveProfileMapper,
     resolvePricingStrategy

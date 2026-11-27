@@ -58,15 +58,15 @@ Admin endpoints (x-api-key required):
 - Keep queue and rate-limiting active for slicing.
 
 ## Preprocessing, Stats and Pricing
-- app/preprocess.py (modes `preprocess`, `transform`) emits `@@RESULT@@{json}` geometry metrics; at most 2 Python spawns per request; `prusa-slicer --info` no longer used for dimensions.
+- app/preprocess.py (modes `preprocess`, `transform`, `preview`) emits `@@RESULT@@{json}` geometry metrics; at most 2 Python spawns per request; `prusa-slicer --info` no longer used for dimensions.
 - orient.py is overhang-aware; cad2stl.py uses curvature-adaptive meshing with OCC healing off (no-healing policy unchanged).
-- Request options: `autoOrient` (default true, INVALID_AUTO_ORIENT), `quantity` (1..1000, default 1, INVALID_QUANTITY).
+- Request options: `autoOrient` (default true, INVALID_AUTO_ORIENT), `quantity` (1..1000, default 1, INVALID_QUANTITY), `includePreview` (default false, INVALID_INCLUDE_PREVIEW; isometric PNG via app/preview_render.py).
 - SLA time/material from `.sl1` config.ini (`printTime`, `usedMaterial`), heuristic fallback only; FDM prefers seconds-accurate comments over M73; G-code read head/tail 256 KB only.
 - Price per request: `ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit)) / 10) * 10` (HUF). materialAmount is grams for FDM and millilitres for SLA.
 - Optional pricing.json sections `materialCost` (`FDM`: HUF/g, `SLA`: HUF/ml per material) and `setupFee` (`FDM`/`SLA` flat HUF per order); files without them stay valid (cost 0).
 - Admin pricing API accepts optional `materialCostPerUnit` on POST /pricing/FDM|SLA and PATCH /pricing/:technology/:material (`price` is optional on PATCH when `materialCostPerUnit` is given); PUT /pricing/:technology/setup-fee takes `{setupFee}`.
 - GET /pricing returns the hourly maps plus `materialCost` and `setupFee`.
-- Slice responses add `quantity`, `price_breakdown`, `cache_hit` and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
+- Slice responses add `quantity`, `price_breakdown`, `cache_hit`, `model_geometry`, optional `preview` and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
 - Result cache key: SHA-256 of file + options except `quantity` + profile/material file mtime/size; `SLICE_RESULT_CACHE_TTL_MS=0` disables it.
 - Output retention sweep and admin GET /metrics (Prometheus text) are active.
 
@@ -94,6 +94,7 @@ Orca:
 - Requires compatible machine/process profile pairing
 - Uses per-request isolated output directories before final output-file alignment.
 - Runs with `--arrange 1 --orient 0` and `--load-filaments` configs/orca/materials/FDM_<MAT>.json.
+- Printer profiles: Prusa `printerProfile=MK4_FDM_<layer>mm.ini` (Original Prusa MK4 IS, 250x210x220; MK4-specific overlays configs/prusa/materials/MK4_FDM_<MAT>.ini are preferred via the profile-name prefix); Orca `printerProfile=Bambu_A1_0.4_nozzle.json` (256^3) or `Bambu_A1_mini_0.4_nozzle.json` (180^3), compatible with the default process profiles. All generated from the official PrusaSlicer 2.8.1 / OrcaSlicer 2.3.1 presets.
 
 ## Queue and Rate Defaults
 - Slice rate limit: 3 requests per minute per IP

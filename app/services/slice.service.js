@@ -13,7 +13,7 @@ const { enqueueSliceJob, toQueueErrorResponse } = require('./slice/queue');
 const { runCommand } = require('./slice/command');
 const { extractFirstSupportedFromZip } = require('./slice/zip');
 const { parseSliceOptions } = require('./slice/options');
-const { convertCadToStl, preprocessModel } = require('./slice/input-processing');
+const { convertCadToStl, preprocessModel, renderPreview } = require('./slice/input-processing');
 const { parseOutputDetailed } = require('./slice/model-stats');
 const { resolveSlicerExecutable, buildSlicerCommandArgs } = require('./slice/engine');
 const { applyTransformAndValidateModel } = require('./slice/transform');
@@ -43,7 +43,8 @@ const {
     finalizeEngineMetadata,
     resolvePrusaBedCenter,
     resolveOrcaFilamentConfigPath,
-    resolveMaterialOverlayPath
+    resolveMaterialOverlayPath,
+    resolvePrinterProfilePrefix
 } = require('./slice/profiles');
 
 /**
@@ -404,7 +405,13 @@ function computeCacheKey(fileHash, engine, options) {
 
     const materialProfileFile = engine === 'orca'
         ? resolveOrcaFilamentConfigPath(options.material)
-        : resolveMaterialOverlayPath(engine, options.technology, options.material, options.layerHeight);
+        : resolveMaterialOverlayPath(
+            engine,
+            options.technology,
+            options.material,
+            options.layerHeight,
+            resolvePrinterProfilePrefix(selection.baseConfigFile)
+        );
     return buildCacheKey({
         fileHash,
         engine,
@@ -476,6 +483,10 @@ async function executeSlicing(state) {
 
         const { transformPlan, effectiveModelInfo, modelBoundsValidation } = modelPreparation;
 
+        const preview = options.includePreview
+            ? await renderPreview(modelPreparation.processableFile, filesCleanupList)
+            : null;
+
         const { stats } = await runSlicerAndParseStats({
             engine,
             technology,
@@ -502,12 +513,14 @@ async function executeSlicing(state) {
             transformOptions,
             transformPlan,
             originalModelInfo,
+            modelGeometry: effectiveModelInfo,
             modelBoundsValidation,
             buildVolumeLimits,
-            stats
+            stats,
+            preview
         };
 
-        const body = { ...buildSliceSuccessResponse(buildResponseContext(artifacts, options)), cache_hit: false };
+        const body ={ ...buildSliceSuccessResponse(buildResponseContext(artifacts, options)), cache_hit: false };
 
         if (cacheKey) {
             sliceResultCache.set(cacheKey, artifacts);

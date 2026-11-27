@@ -60,6 +60,26 @@ function createSwaggerDocument(pricing) {
             infill: { type: 'string', example: '20%' },
             profiles: { type: 'object', additionalProperties: { type: 'string' } },
             model_transform: { type: 'object' },
+            model_geometry: {
+                type: 'object',
+                description: 'Geometry of the final (oriented and transformed) model. The printed material mass is stats.material_used_g.',
+                properties: {
+                    volume_cm3: { type: 'number', nullable: true, description: 'Solid model volume; null when the mesh is not watertight.' },
+                    surface_area_cm2: { type: 'number', nullable: true },
+                    is_watertight: { type: 'boolean', nullable: true },
+                    triangle_count: { type: 'integer', nullable: true }
+                }
+            },
+            preview: {
+                type: 'object',
+                description: 'Present only when includePreview=true and rendering succeeded.',
+                properties: {
+                    format: { type: 'string', example: 'png' },
+                    width: { type: 'integer', example: 512 },
+                    height: { type: 'integer', example: 512 },
+                    data_base64: { type: 'string', description: 'Isometric PNG preview of the model as sliced.' }
+                }
+            },
             build_volume_limits_mm: { type: 'object' },
             hourly_rate: { type: 'number' },
             quantity: { type: 'integer', example: 1 },
@@ -90,12 +110,17 @@ function createSwaggerDocument(pricing) {
         maximum: 1000,
         description: 'Number of pieces to price (pricing only; not part of the result cache key). Invalid value returns `INVALID_QUANTITY`.'
     };
+    const includePreviewField = {
+        type: 'boolean',
+        default: false,
+        description: 'Add an isometric PNG preview (base64) of the model as sliced to the response. Invalid value returns `INVALID_INCLUDE_PREVIEW`.'
+    };
 
     const document = {
         openapi: '3.0.0',
         info: {
             title: '3D Printer Slicer API for FDM and SLA',
-            version: '3.1.5',
+            version: '3.3.0',
             description: 'Automated 3D slicing and pricing engine for FDM and SLA technologies.'
         },
         tags: [
@@ -529,9 +554,10 @@ function createSwaggerDocument(pricing) {
                                     },
                                     autoOrient: autoOrientField,
                                     quantity: quantityField,
+                                    includePreview: includePreviewField,
                                     printerProfile: {
                                         type: 'string',
-                                        description: 'Optional override profile filename from `configs/prusa` (for example `FDM_0.2mm.ini`).'
+                                        description: 'Optional override profile filename from `configs/prusa` (for example `FDM_0.2mm.ini`, or `MK4_FDM_0.1mm.ini` / `MK4_FDM_0.2mm.ini` / `MK4_FDM_0.3mm.ini` for the Original Prusa MK4).'
                                     }
                                 },
                                 required: ['choosenFile', 'layerHeight', 'material']
@@ -629,9 +655,10 @@ function createSwaggerDocument(pricing) {
                                     },
                                     autoOrient: autoOrientField,
                                     quantity: quantityField,
+                                    includePreview: includePreviewField,
                                     printerProfile: {
                                         type: 'string',
-                                        description: 'Optional Orca machine profile filename from `configs/orca` (for example `Bambu_P1S_0.4_nozzle.json`).'
+                                        description: 'Optional Orca machine profile filename from `configs/orca` (`Bambu_P1S_0.4_nozzle.json`, `Bambu_A1_0.4_nozzle.json`, `Bambu_A1_mini_0.4_nozzle.json`).'
                                     },
                                     processProfile: {
                                         type: 'string',

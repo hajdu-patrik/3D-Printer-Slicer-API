@@ -116,10 +116,32 @@ async function preprocessModel(processableFile, technology, autoOrient, filesCle
     return { processableFile: outputPath, modelInfo: parsePreprocessResult(stdout) };
 }
 
+/**
+ * Render an isometric PNG preview of the final (oriented + transformed) STL.
+ * A preview failure never fails the slice: it is logged and reported as null.
+ * @param {string} processableFile Final STL path that is sent to the slicer.
+ * @param {string[]} filesCleanupList Temporary file collector.
+ * @returns {Promise<{format: 'png', width: number, height: number, data_base64: string} | null>} Preview payload.
+ */
+async function renderPreview(processableFile, filesCleanupList) {
+    const previewPath = `${processableFile}_preview_${Date.now()}.png`;
+    filesCleanupList.push(previewPath);
+    try {
+        const { stdout } = await runCommand(PYTHON_EXECUTABLE, ['preprocess.py', 'preview', processableFile, previewPath]);
+        const meta = parsePreprocessResult(stdout);
+        const data = await fs.promises.readFile(previewPath);
+        return { format: 'png', width: meta.width, height: meta.height, data_base64: data.toString('base64') };
+    } catch (err) {
+        console.warn(`[WARN] Preview rendering failed, continuing without preview: ${err.message}`);
+        return null;
+    }
+}
+
 module.exports = {
     convertInputToStl,
     tryOptimizeOrientation,
     convertCadToStl,
     preprocessModel,
-    parsePreprocessResult
+    parsePreprocessResult,
+    renderPreview
 };

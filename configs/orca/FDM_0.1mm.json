@@ -12,6 +12,8 @@
     "enable_support": "1",
     "support_type": "normal(auto)",
     "compatible_printers": [
-        "MyMarlin 0.4 nozzle"
+        "MyMarlin 0.4 nozzle",
+        "Local Bambu Lab A1 0.4 nozzle",
+        "Local Bambu Lab A1 mini 0.4 nozzle"
     ]
 }

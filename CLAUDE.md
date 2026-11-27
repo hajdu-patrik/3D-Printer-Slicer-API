@@ -66,15 +66,15 @@ Admin-protected endpoints (x-api-key required):
 - GET /admin/download/:fileName
 
 ## Preprocessing, Stats and Pricing
-- app/preprocess.py has modes `preprocess` and `transform` and prints a `@@RESULT@@{json}` line (x, y, z, volume_mm3, surface_area_mm2, is_watertight, triangle_count); at most 2 Python spawns per request; `prusa-slicer --info` is no longer used for dimensions.
+- app/preprocess.py has modes `preprocess`, `transform` and `preview` (isometric PNG via app/preview_render.py, Pillow, only when `includePreview=true`) and prints a `@@RESULT@@{json}` line (x, y, z, volume_mm3, surface_area_mm2, is_watertight, triangle_count); at most 2 Python spawns per request; `prusa-slicer --info` is no longer used for dimensions.
 - app/orient.py scores orientation candidates overhang-aware; cad2stl.py uses curvature-adaptive meshing with OCC healing options explicitly off.
-- Request options: `autoOrient` (bool, default true, INVALID_AUTO_ORIENT) and `quantity` (int 1..1000, default 1, INVALID_QUANTITY).
+- Request options: `autoOrient` (bool, default true, INVALID_AUTO_ORIENT), `quantity` (int 1..1000, default 1, INVALID_QUANTITY) and `includePreview` (bool, default false, INVALID_INCLUDE_PREVIEW).
 - SLA print time/material come from `.sl1` config.ini (`printTime`, `usedMaterial`), heuristic only as fallback; FDM time prefers seconds-accurate G-code comments over M73; G-code is read head/tail 256 KB only (app/services/slice/gcode-metadata.js, sla-stats.js).
 - Price per request: `ceil((setupFee + quantity * (max(hours, 0.25) * hourlyRate + materialAmount * materialCostPerUnit)) / 10) * 10` (HUF). materialAmount is grams for FDM and millilitres for SLA.
 - Optional pricing.json sections `materialCost` (`FDM`: HUF/g, `SLA`: HUF/ml per material) and `setupFee` (`FDM`/`SLA` flat HUF per order); files without them stay valid (cost 0).
 - Admin pricing API accepts optional `materialCostPerUnit` on POST /pricing/FDM|SLA and PATCH /pricing/:technology/:material (`price` is optional on PATCH when `materialCostPerUnit` is given); PUT /pricing/:technology/setup-fee takes `{setupFee}`.
 - GET /pricing returns the hourly maps plus `materialCost` and `setupFee`.
-- Slice responses add `quantity`, `price_breakdown`, `cache_hit` and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
+- Slice responses add `quantity`, `price_breakdown`, `cache_hit`, `model_geometry` (volume_cm3 or null when not watertight, surface_area_cm2, is_watertight, triangle_count of the final model), optional `preview` (base64 PNG) and stats fields `print_time_source` (`slicer`|`estimate`), `material_used_g`, `material_used_ml`.
 - Result cache (app/services/slice/result-cache.js): key is SHA-256 of file bytes + engine + options except `quantity` + profile/material file mtime/size; hits return `cache_hit: true`, recompute price, and create no new output file. `SLICE_RESULT_CACHE_TTL_MS=0` disables it.
 - Output retention sweep (app/services/output-retention.service.js) removes old output artifacts and stale upload temp files (OUTPUT_RETENTION_HOURS, UPLOAD_TEMP_RETENTION_MINUTES, OUTPUT_CLEANUP_INTERVAL_MS).
 - GET /metrics (admin) exposes Prometheus text metrics.
@@ -144,6 +144,7 @@ Orca:
 - Requires machine profile + process profile compatibility
 - Uses per-request isolated output directories before final artifact alignment.
 - Runs with `--arrange 1 --orient 0` (orientation is done once by orient.py) and `--load-filaments` with configs/orca/materials/FDM_<MAT>.json.
+- Printer profiles: Prusa `printerProfile=MK4_FDM_<layer>mm.ini` (Original Prusa MK4 IS, 250x210x220; MK4-specific overlays configs/prusa/materials/MK4_FDM_<MAT>.ini are preferred via the profile-name prefix); Orca `printerProfile=Bambu_A1_0.4_nozzle.json` (256^3) or `Bambu_A1_mini_0.4_nozzle.json` (180^3), compatible with the default process profiles. All generated from the official PrusaSlicer 2.8.1 / OrcaSlicer 2.3.1 presets.
 
 ## Configuration Keys
 Core keys from .env:

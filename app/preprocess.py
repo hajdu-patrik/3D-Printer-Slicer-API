@@ -3,8 +3,12 @@
 Modes:
     python3 preprocess.py preprocess INPUT OUTPUT.stl [--technology FDM|SLA] [--auto-orient 1|0]
     python3 preprocess.py transform  INPUT OUTPUT.stl --scale SX SY SZ --rotate RX RY RZ
+    python3 preprocess.py preview    INPUT.stl OUTPUT.png [--size 512]
 
-Both modes export an STL placed on the build plate (centered in XY, min Z = 0)
+The preview mode renders an isometric PNG (see preview_render.py) and emits
+@@RESULT@@{"width":..,"height":..,"format":"png"}.
+
+The preprocess and transform modes export an STL placed on the build plate (centered in XY, min Z = 0)
 and print exactly one result line on stdout:
 
     @@RESULT@@{"x":..,"y":..,"z":..,"volume_mm3":..,"surface_area_mm2":..,
@@ -142,6 +146,15 @@ def run_transform(input_path, output_path, scale, rotate_deg):
     emit_result(build_result(mesh))
 
 
+def run_preview(input_path, output_png, size):
+    """Render an isometric PNG preview of an already prepared STL and emit its size."""
+    from preview_render import render_preview
+
+    mesh = load_mesh(input_path)
+    width, height = render_preview(mesh, output_png, size=size)
+    emit_result({"width": width, "height": height, "format": "png"})
+
+
 def _bool_arg(value):
     return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
 
@@ -162,10 +175,17 @@ def main(argv):
     t.add_argument("--scale", nargs=3, type=float, required=True, metavar=("SX", "SY", "SZ"))
     t.add_argument("--rotate", nargs=3, type=float, default=[0, 0, 0], metavar=("RX", "RY", "RZ"))
 
+    v = sub.add_parser("preview")
+    v.add_argument("input")
+    v.add_argument("output")
+    v.add_argument("--size", type=int, default=512, choices=range(64, 2049), metavar="64..2048")
+
     args = parser.parse_args(argv)
     try:
         if args.mode == "preprocess":
             run_preprocess(args.input, args.output, args.technology.upper(), _bool_arg(args.auto_orient))
+        elif args.mode == "preview":
+            run_preview(args.input, args.output, args.size)
         else:
             run_transform(args.input, args.output, args.scale, args.rotate)
     except SourceGeometryError as exc:

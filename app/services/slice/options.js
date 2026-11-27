@@ -331,25 +331,46 @@ function parseTransformOptions(body) {
 }
 
 /**
- * Parse optional autoOrient flag (default true).
+ * Parse an optional boolean-like request flag.
  * @param {Record<string, unknown>} body Request payload.
+ * @param {string} fieldName Request field name.
+ * @param {boolean} defaultValue Value used when the field is absent.
+ * @param {string} errorCode Error code for invalid values.
  * @returns {{isValid: true, value: boolean} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
  */
-function parseAutoOrient(body) {
-    const raw = pickFirstNonEmptyValue(body, ['autoOrient']);
-    if (raw === undefined) return { isValid: true, value: true };
+function parseBooleanFlag(body, fieldName, defaultValue, errorCode) {
+    const raw = pickFirstNonEmptyValue(body, [fieldName]);
+    if (raw === undefined) return { isValid: true, value: defaultValue };
     const parsed = parseBooleanLike(raw);
     if (parsed === null) {
         return {
             isValid: false,
             response: {
                 success: false,
-                error: 'Invalid autoOrient value. Allowed values: true/false.',
-                errorCode: 'INVALID_AUTO_ORIENT'
+                error: `Invalid ${fieldName} value. Allowed values: true/false.`,
+                errorCode
             }
         };
     }
     return { isValid: true, value: parsed };
+}
+
+/**
+ * Parse optional autoOrient flag (default true).
+ * @param {Record<string, unknown>} body Request payload.
+ * @returns {{isValid: true, value: boolean} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
+ */
+function parseAutoOrient(body) {
+    return parseBooleanFlag(body, 'autoOrient', true, 'INVALID_AUTO_ORIENT');
+}
+
+/**
+ * Parse optional includePreview flag (default false).
+ * @param {Record<string, unknown>} body Request payload.
+ * @returns {{isValid: true, value: boolean} | {isValid: false, response: {success: false, error: string, errorCode: string}}} Parse result.
+ */
+function parseIncludePreview(body) {
+    return parseBooleanFlag(body, 'includePreview', false, 'INVALID_INCLUDE_PREVIEW');
 }
 
 /**
@@ -420,6 +441,11 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
         return { isValid: false, response: quantityResult.response };
     }
 
+    const includePreviewResult = parseIncludePreview(input);
+    if (!includePreviewResult.isValid) {
+        return { isValid: false, response: includePreviewResult.response };
+    }
+
     const profileOverridesResult = parseProfileOverrides(input, engine);
     if (!profileOverridesResult.isValid) {
         return {
@@ -461,6 +487,7 @@ function parseSliceOptions(body, forcedTechnology, engine = 'prusa') {
             transformOptions: transformOptionsResult.options,
             autoOrient: autoOrientResult.value,
             quantity: quantityResult.value,
+            includePreview: includePreviewResult.value,
             profileOverrides: profileOverridesResult.profileOverrides
         }
     };

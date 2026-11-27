@@ -24,9 +24,14 @@ This folder contains runtime configuration files used by slicing and pricing.
   - Material overlays merged into the Prusa runtime profile (safe-name regex; unknown material uses the base profile).
   - Values are copied from the official PrusaSlicer 2.8.1 presets: FDM from `[filament:Generic PLA|PETG|ABS|FLEX]` (PrusaResearch.ini, TPU -> Generic FLEX), SLA from `[sla_material:Prusament Resin Tough Prusa Orange|Flex80 Black @<layer> SL1S]` (PrusaResearchSLA.ini). Each file header names its source preset; re-sync them when the bundled PrusaSlicer version changes.
 
+- configs/prusa/MK4_FDM_<layer>mm.ini and configs/prusa/materials/MK4_FDM_<MAT>.ini
+  - Original Prusa MK4 (Input Shaper, 0.4) full profiles generated from official PrusaSlicer 2.8.1 presets (printer `Original Prusa MK4 Input Shaper 0.4 nozzle`, prints `0.10mm FAST DETAIL @MK4IS 0.4` / `0.20mm SPEED @MK4IS 0.4` / `0.30mm DRAFT @MK4 0.4`, filaments `Generic PLA|PETG @PGIS`, `Generic ABS|FLEX @MK4`). `binary_gcode = 0` and thumbnails disabled for headless parsing.
+  - The `<PRINTER>_` file-name prefix selects printer-specific material overlays before the generic ones.
+
 - configs/orca/*.json
   - Orca machine and process presets.
   - Machine and process compatibility must be respected.
+  - Bambu_A1_0.4_nozzle.json / Bambu_A1_mini_0.4_nozzle.json are generated from the official OrcaSlicer 2.3.1 BBL machine presets with `time_lapse_gcode` and `change_filament_gcode` removed (they reset E every layer and corrupt Orca's absolute-E output for local presets). Their names are listed in `compatible_printers` of FDM_0.1/0.2/0.3mm.json.
 
 - configs/orca/materials/FDM_<MAT>.json
   - Orca filament presets passed via `--load-filaments`.
